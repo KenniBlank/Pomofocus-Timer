@@ -3,6 +3,8 @@
 // - [ ] New Task
 // - [ ] Statistics
 // - [ ] On complete sound for break and focus, different
+// - [ ] Save and Load System
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,6 +78,7 @@ enum {
 	COLOR_TXT_DEFAULT,
 
 	COLOR_BUTTON_FSL_BACKGROUND, // FSB = Focus, Short break, Long break
+	COLOR_BUTTON_FSL_BACKGROUND_SELECTED, // FSB = Focus, Short break, Long break
 
 	COLOR_BUTTON_SS_BACKGROUND_INACTIVE, // SS = Start Stop
 	COLOR_BUTTON_SS_BACKGROUND_ACTIVE,
@@ -233,6 +236,7 @@ int initialize_data(PomodoroData* data) {
 	data->colors[COLOR_BACKGROUND_ACTIVE] = (Clay_Color) {.r = 178, .g = 242, .b = 187, .a = 255};
 	data->colors[COLOR_TXT_DEFAULT] = (Clay_Color) {.r = 0, .g = 0, .b = 0, .a = 255};
 	data->colors[COLOR_BUTTON_FSL_BACKGROUND] = (Clay_Color) {.r = 233, .g = 236, .b = 239, .a = 255};
+	data->colors[COLOR_BUTTON_FSL_BACKGROUND_SELECTED] = (Clay_Color) {.r = 255, .g = 255, .b = 255, .a = 255};
 	data->colors[COLOR_BUTTON_SS_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 255, .g = 249, .b = 219, .a = 255};
 	data->colors[COLOR_BUTTON_SS_BACKGROUND_ACTIVE] = (Clay_Color) {.r = 250, .g = 82, .b = 82, .a = 255};
 
@@ -811,10 +815,10 @@ void Device_Smart_Phone(PomodoroData* data) {
 					},
 					.cornerRadius = CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_RADIUS * 2))
 				}){
-					// TODO: make it obvious in which mode the user is in
-					RenderButton(str_Focus, COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
-					RenderButton(str_Short_Break, COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
-					RenderButton(str_Long_Break, COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					// TODO: Better color for selected and clickables
+					RenderButton(str_Focus, data->appState == STATE_FOCUS_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderButton(str_Short_Break, data->appState == STATE_SHORT_BREAK_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderButton(str_Long_Break, data->appState == STATE_SHORT_BREAK_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 				}
 			}
 
