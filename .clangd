@@ -1,0 +1,6 @@
+CompileFlags:
+        Add:
+                - "--include-directory=/home/Blank/Programming/From-Scratch/Pomofocus Timer/include"
+Diagnostics:
+        MissingIncludes: Strict
+        UnusedIncludes: Strict
