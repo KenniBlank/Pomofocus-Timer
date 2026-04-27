@@ -1,5 +1,4 @@
 // TODOs:
-// - [ ] Fix rendering of long task description
 // - [ ] Modifing Tasks
 // - [ ] New Task
 // - [ ] Statistics
@@ -223,9 +222,9 @@ int initialize_data(PomodoroData* data) {
 	Add_Task(&data->tasks, CreateNewTask("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.", 6, 10), data->options.rearrangeTaskOnSelect);
 
 	if (data->timerConstraints.timerStr.chars == NULL) return 1;
-	data->timerConstraints.time_constants[FOCUS_TIMER] = 3; // 25 * 60;
-	data->timerConstraints.time_constants[LONG_BREAK_TIMER] = 2; // 15 * 60;
-	data->timerConstraints.time_constants[SHORT_BREAK_TIMER] = 1; // 5 * 60;
+	data->timerConstraints.time_constants[FOCUS_TIMER] = 25 * 60;
+	data->timerConstraints.time_constants[LONG_BREAK_TIMER] = 15 * 60;
+	data->timerConstraints.time_constants[SHORT_BREAK_TIMER] = 5 * 60;
 	data->timerConstraints.timer = data->timerConstraints.time_constants[FOCUS_TIMER];
 
 	data->colors = malloc(sizeof(Clay_Color) * COLOR_SIZE);
@@ -371,7 +370,6 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 	cornerRadius = (cornerRadius > 1.0f) ? cornerRadius: 0.0f;
 
 	CLAY(CLAY_SID(txt)) {
-
 		Clay_Color bg_color = colors_array[BG_COLOR];
 		if (Clay_Hovered()) {
 			bg_color.a -= 100;
@@ -405,14 +403,24 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 }
 
 void RenderTask(PomodoroData *data, struct Task task, int taskIndex, int TXT_COLOR, int FONT_ID, int font_size, int letter_spacing) {
-	CLAY_AUTO_ID({
-		.layout = {
-			.layoutDirection = CLAY_LEFT_TO_RIGHT,
-			.padding = {
-				.top = getFontHelper(data, BUTTON_PADDING),
-				.bottom = getFontHelper(data, BUTTON_PADDING),
-			},
+	Clay_LayoutConfig layout = {
+		.layoutDirection = CLAY_LEFT_TO_RIGHT,
+		.padding = {
+			.top = getFontHelper(data, BASE_FONT_SIZE),
+			.bottom = getFontHelper(data, BASE_FONT_SIZE),
+			.left = 0,
+			.right = 1
 		}
+	};
+
+	if (data->tasks.currentSelectedTask != taskIndex) {
+		float borderWidth = getFontHelper(data, BORDER_WIDTH * 2);
+
+		layout.childGap = getFontHelper(data, HEADER2) * 2;
+	}
+
+	CLAY_AUTO_ID({
+		.layout = layout,
 	}) {
 		if (Clay_Hovered()) {
 			if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
@@ -421,14 +429,16 @@ void RenderTask(PomodoroData *data, struct Task task, int taskIndex, int TXT_COL
 		}
 		CLAY_AUTO_ID({
 			.layout = {
-				.sizing = { .width = CLAY_SIZING_FIT(0), .height = CLAY_SIZING_FIT(0) },
+				.sizing = {
+					.width = CLAY_SIZING_FIT(0),
+					.height = CLAY_SIZING_FIT(0)
+				},
 				.childAlignment = {
 					.x = CLAY_ALIGN_X_LEFT,
 					.y = CLAY_ALIGN_Y_TOP
 				}
-			},
+			}
 		}) {
-
 			CLAY_TEXT(STRING_TO_CLAY_STRING(task.desc), {
 				.fontSize = font_size,
 				.fontId = FONT_ID,
@@ -439,23 +449,24 @@ void RenderTask(PomodoroData *data, struct Task task, int taskIndex, int TXT_COL
 			});
 		}
 
-		CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}}}){}
-
 		CLAY_AUTO_ID({
 			.layout = {
-				.sizing = { .width = CLAY_SIZING_FIT(0), .height = CLAY_SIZING_FIT(0) },
+				.sizing = {
+					.width = CLAY_SIZING_GROW(0),
+					.height = CLAY_SIZING_FIT(0)
+				},
 				.childAlignment = {
 					.x = CLAY_ALIGN_X_RIGHT,
 					.y = CLAY_ALIGN_Y_TOP
 				}
-			},
+			}
 		}) {
 			CLAY_TEXT(STRING_TO_CLAY_STRING(task.countExpected), {
 				.fontSize = font_size,
 				.fontId = FONT_ID,
 				.textColor = data->colors[TXT_COLOR],
 				.letterSpacing = letter_spacing,
-				.wrapMode = CLAY_TEXT_WRAP_NONE,
+				.wrapMode = CLAY_TEXT_WRAP_WORDS,
 				.textAlignment = CLAY_TEXT_ALIGN_RIGHT
 			});
 		}
@@ -683,7 +694,12 @@ void Device_Smart_Phone(PomodoroData* data) {
 		},
 		.backgroundColor = RAYLIB_COLOR_TO_CLAY_COLOR(WHITE),
 	}) {
-		float WIDTH = Clay_GetElementData(CLAY_ID("Buttons")).boundingBox.width + getFontHelper(data, HEADER2) * 2;
+		float WIDTH = 0.0f;
+		if (data->appState % 2 == 0) {
+			WIDTH = Clay_GetElementData(CLAY_ID("Timer")).boundingBox.width;
+		} else {
+			WIDTH = Clay_GetElementData(CLAY_ID("Buttons")).boundingBox.width + getFontHelper(data, HEADER2) * 2;
+		}
 		float borderWidth = getFontHelper(data, BORDER_WIDTH * 2);
 		borderWidth = (borderWidth > 1.0f) ? borderWidth: 1.0f;
 
@@ -726,7 +742,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 				// Settings Button
 			}
 		}
-		CLAY(CLAY_ID("Timer"), {
+		CLAY_AUTO_ID({
 			.layout  = {
 				.layoutDirection = CLAY_TOP_TO_BOTTOM,
 				.sizing = {
@@ -764,9 +780,8 @@ void Device_Smart_Phone(PomodoroData* data) {
 								.width = CLAY_SIZING_FIXED(WIDTH),
 								.height = CLAY_SIZING_FIT(0, getFontHelper(data, HEADER3 * 3)),
 							},
-							.padding = {
-								.bottom = getFontHelper(data, PARAGRAPH)
-							}
+							.layoutDirection = CLAY_TOP_TO_BOTTOM,
+							.childGap = getFontHelper(data, PARAGRAPH)
 						},
 						.border = {
 							.width = {
@@ -776,6 +791,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 						},
 					}) {
 						RenderTask(data, tasks.tasks[tasks.currentSelectedTask], tasks.currentSelectedTask, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, HEADER3), getFontHelper(data, LETTER_SPACING));
+						CLAY_AUTO_ID({});
 					}
 				}
 			} else {
@@ -802,7 +818,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 				}
 			}
 
-			CLAY_AUTO_ID({
+			CLAY(CLAY_ID("Timer"), {
 				.layout = {
 					.layoutDirection = CLAY_TOP_TO_BOTTOM,
 					.sizing = {
@@ -847,6 +863,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 				);
 			}
 
+			// TODO: Fix it
 			if (data->appState % 2 != 0) {
 				if (tasks.currentSelectedTask >= 0 && tasks.currentSelectedTask < tasks.tasks_count) {
 					CLAY_AUTO_ID({
@@ -889,14 +906,22 @@ void Device_Smart_Phone(PomodoroData* data) {
 						.width = CLAY_SIZING_FIXED(WIDTH),
 						.height = CLAY_SIZING_FIT(0)
 					},
-					.padding = CLAY_PADDING_ALL(getFontHelper(data, BASE_FONT_SIZE)),
+					.padding = {
+						.top = getFontHelper(data, LETTER_SPACING),
+						.bottom = getFontHelper(data, LETTER_SPACING)
+					},
+					.childAlignment = {
+						.x = CLAY_ALIGN_X_CENTER,
+						.y = CLAY_ALIGN_Y_CENTER,
+					},
+					.childGap = getFontHelper(data, HEADER6)
 				},
 				.border = {
 					.width = {
 						.betweenChildren = borderWidth
 					},
 					.color = data->colors[COLOR_TXT_DEFAULT]
-				},
+				}
 			}){
 				for (int i = 0; i < tasks.tasks_count; ++i) {
 					if (i == tasks.currentSelectedTask) continue;

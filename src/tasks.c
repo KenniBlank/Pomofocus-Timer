@@ -78,8 +78,7 @@ int Add_Task(Tasks* task_arr, struct Task newTask, bool rearrange) {
 }
 
 void Select_Task(Tasks *tasks, int index, bool rearrange) {
-	if (index == tasks->currentSelectedTask) tasks->currentSelectedTask = -1;
-
+	// if (index == tasks->currentSelectedTask) tasks->currentSelectedTask = -1;
 	if (index > tasks->tasks_count || index < 0) return;
 	if (!rearrange) {
 		tasks->currentSelectedTask = index;
