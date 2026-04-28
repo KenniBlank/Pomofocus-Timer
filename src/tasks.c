@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include "tasks.h"
@@ -14,19 +15,23 @@ int Init_Tasks(Tasks* task_arr) {
 	task_arr->__capacity__ = capacity;
 	task_arr->tasks_count = 0;
 	task_arr->currentSelectedTask = -1;
-	task_arr->isDragging = false;
 	task_arr->isEditing = true;
-	task_arr->allSelected = false;
 
+	// TODO:
+	task_arr->isDragging = false;
 	return 0;
 }
 
 Task CreateNewTask(const char *str_literal, int count, int expected) {
+	static int id = 0;
+
 	Task newTask = {
 		.count = count,
 		.expected = expected,
-		.completed = false
+		.completed = false,
+		.id = id
 	};
+	id++;
 
 	// TODO: error handling
 	newTask.desc.capacity = STR_BUFFER_CAPACITY;
@@ -34,7 +39,8 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	if (newTask.desc.chars == NULL) {
 		return newTask;
 	}
-	newTask.desc.length = snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
+	snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
+	newTask.desc.length = strlen(newTask.desc.chars);
 
 	newTask.countExpected.capacity = 16; // MAGIC NUMBER fix later
 	newTask.countExpected.chars = malloc(sizeof(char) * newTask.countExpected.capacity);
@@ -42,7 +48,8 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 		free(newTask.desc.chars);
 		return newTask;
 	}
-	newTask.countExpected.length = snprintf(newTask.countExpected.chars, newTask.countExpected.capacity, "%d/%d", count, expected);
+	snprintf(newTask.countExpected.chars, newTask.countExpected.capacity, "%d/%d", count, expected);
+	newTask.countExpected.length = strlen(newTask.countExpected.chars);
 
 	return newTask;
 };
@@ -90,13 +97,13 @@ void Remove_Char_From_Task(Task* task) {
 void Select_Task(Tasks *tasks, int index, bool rearrange) {
 	if (index == tasks->currentSelectedTask) tasks->currentSelectedTask = -1;
 	if (index > tasks->tasks_count || index < 0) return;
+
 	if (!rearrange) {
 		tasks->currentSelectedTask = index;
 		return;
 	}
 
 	Task selectedTask = tasks->tasks[index];
-	// index = tasks->tasks_count - 1;
 	while (index > 0) {
 		tasks->tasks[index] = tasks->tasks[index - 1];
 		--index;
@@ -108,7 +115,8 @@ void Select_Task(Tasks *tasks, int index, bool rearrange) {
 int Add_Focus_Count_To_Task(Task *task) {
 	// TODO: case handling in case the task's expected string is not long enough
 	task->count++;
-	task->countExpected.length = snprintf(task->countExpected.chars, task->countExpected.capacity, "%d/%d", task->count, task->expected);
+	snprintf(task->countExpected.chars, task->countExpected.capacity, "%d/%d", task->count, task->expected);
+	task->countExpected.length = strlen(task->countExpected.chars);
 	return 0;
 }
 

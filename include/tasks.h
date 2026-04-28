@@ -15,6 +15,8 @@ struct Task {
 	int count;
 	int expected;
 
+	int id;
+
 	bool completed;
 };
 
@@ -24,10 +26,9 @@ typedef struct {
 	int tasks_count;
 
 	int currentSelectedTask;
-	bool isDragging;
+	bool isEditing;
 
-	bool isEditing; // make it conditional rn its true always
-	bool allSelected; // CTRL+A
+	bool isDragging;
 } Tasks;
 
 int Init_Tasks(Tasks*);

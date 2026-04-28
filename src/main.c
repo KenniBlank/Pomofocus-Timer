@@ -1,9 +1,16 @@
 // TODOs:
-// - [ ] Modifing Tasks
+// - [x] Modifing Tasks
+	// - [ ] Add repeating keys option + CTRL + A to select all +
+
 // - [ ] New Task
+// - [ ] Add visual cue to selected task, tick for completed task, modify focus count on pomodoro counts
 // - [ ] Statistics
 // - [ ] On complete sound for break and focus, different
 // - [ ] Save and Load System
+// - [ ] Optimize to use as little memory as possible
+// - [ ] Compile for release: .exe, .flatpak, .deb, nah not snap and so on, maybe use raylib's build template
+// - [ ] Push to github
+
 
 #include <math.h>
 #include <stdio.h>
@@ -12,6 +19,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 // #include "cJSON.h": Save and Load System
+// Here is the truth: I could make a .dat file for saving but i want the user to be able to easily be able to transfer over to other apps if this doesn't meet their requirements
 
 #include "raylib.h"
 
@@ -37,7 +45,7 @@
 #define getFontHelper(data, fontSize) FONT_SIZE(getFontSize(data->deviceDimensions.x, data->deviceDimensions.y, fontSize))
 
 #define APP_TITLE "PomoFocus Timer" // Pomo means tomato btw
-#define PRINT(variable) printf(#variable " = %g\n", variable); fflush(stdout);
+#define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout);
 #define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
 
 // GLOBAL variables
@@ -142,7 +150,7 @@ typedef struct {
 	float REPEAT_INTERVAL; // How much time per repeat
 
 	float SCROLL_MULTIPLIER;
-	bool rearrangeTaskOnSelect;
+	bool rearrangeTaskOnSelect; // Moves task to top
 } Options;
 
 typedef struct {
@@ -225,12 +233,12 @@ int initialize_data(PomodoroData* data) {
 
 	// TODO: remove later cause this is just dummy
 	// NP here
-	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 1", 1, 10), data->options.rearrangeTaskOnSelect);
-	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 2", 2, 10), data->options.rearrangeTaskOnSelect);
-	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 3", 3, 10), data->options.rearrangeTaskOnSelect);
-	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 4", 4, 10), data->options.rearrangeTaskOnSelect);
 	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 5", 5, 10), data->options.rearrangeTaskOnSelect);
-	Add_Task(&data->tasks, CreateNewTask("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.", 6, 10), data->options.rearrangeTaskOnSelect);
+	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 4", 4, 10), data->options.rearrangeTaskOnSelect);
+	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 3", 3, 10), data->options.rearrangeTaskOnSelect);
+	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 2", 2, 10), data->options.rearrangeTaskOnSelect);
+	Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 1", 1, 10), data->options.rearrangeTaskOnSelect);
+	// Add_Task(&data->tasks, CreateNewTask("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.", 6, 10), data->options.rearrangeTaskOnSelect);
 
 	if (data->timerConstraints.timerStr.chars == NULL) return 1;
 	data->timerConstraints.time_constants[FOCUS_TIMER] = 25 * 60;
@@ -359,7 +367,8 @@ int main(void) {
 		}
 		float *timer = &pomo_data.timerConstraints.timer;
 		struct String *str = &pomo_data.timerConstraints.timerStr;
-		str->length = snprintf(str->chars, str->capacity, "%02d:%02d", (int)*timer / 60, (int)*timer % 60);
+		snprintf(str->chars, str->capacity, "%02d:%02d", (int)*timer / 60, (int)*timer % 60);
+		str->length = strlen(str->chars);
 
 		BeginDrawing();
 			ClearBackground(BLACK);
@@ -437,33 +446,44 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 		.layout = layout,
 	}) {
 		if (Clay_Hovered()) {
-			// if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-			// 	data->tasks.isDragging = true;
 			if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
 				Select_Task(&data->tasks, taskIndex, data->options.rearrangeTaskOnSelect);
+				Clay_UpdateScrollContainers(true, (Clay_Vector2) { .x = 0.0f, .y = 0.0f }, GetFrameTime());
+				data->tasks.isEditing = false;
 			}
 		}
 
 		if (taskIndex == data->tasks.currentSelectedTask && calledFromTasks) {
+			Clay_BorderElementConfig border = {};
+			Clay_CornerRadius cornerRadius = {};
+			Clay_Padding padding = {};
+			if (data->tasks.isEditing) {
+				border.color = data->colors[TXT_COLOR];
+				border.width = (Clay_BorderWidth) CLAY_BORDER_OUTSIDE(borderWidth);
+				cornerRadius = (Clay_CornerRadius) CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_WIDTH * 4));
+				padding = (Clay_Padding) CLAY_PADDING_ALL(font_size / 2); // TODO: Clay doesn't handle left right padding well, find alternative
+			}
+
 			CLAY(CLAY_ID("Selected Text"), {
 				.layout = {
 					.sizing = {
 						.width = CLAY_SIZING_FIT(0),
 						.height = CLAY_SIZING_FIT(0)
 					},
-					.padding = CLAY_PADDING_ALL(getFontHelper(data, BASE_FONT_SIZE)),
+					.padding = padding,
 					.childAlignment = {
-						.x = CLAY_ALIGN_X_LEFT,
-						.y = CLAY_ALIGN_Y_TOP
+						.x = CLAY_ALIGN_X_CENTER,
+						.y = CLAY_ALIGN_Y_CENTER
 					},
 				},
-				.border = {
-					.color = data->colors[TXT_COLOR],
-					.width = CLAY_BORDER_OUTSIDE(borderWidth)
-				}
+				.border = border,
+				.cornerRadius = cornerRadius
 			}) {
-				Add_Char_To_Task(task, '|');
-
+				if (Clay_Hovered()) {
+					if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+						data->tasks.isEditing = true;
+					}
+				}
 				CLAY_TEXT(STRING_TO_CLAY_STRING(task->desc), {
 					.fontSize = font_size,
 					.fontId = FONT_ID,
@@ -472,8 +492,6 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
 					.textAlignment = CLAY_TEXT_ALIGN_LEFT
 				});
-
-				Remove_Char_From_Task(task);
 			}
 		} else {
 			CLAY_AUTO_ID({
@@ -499,7 +517,6 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 			}
 		}
 
-
 		CLAY_AUTO_ID({
 			.layout = {
 				.sizing = {
@@ -524,26 +541,26 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 	}
 }
 
-// Am gonna check on zed's issue real quick
-void handle_edits_to_task(PomodoroData* data) {
-	static int index = -1;
+static void handle_edits_to_task(PomodoroData* data) {
+	static int task_id = -1;
 
-	static char str_buffer[STR_BUFFER_CAPACITY];
 	static int str_buffer_length = 0;
+	static char str_buffer[STR_BUFFER_CAPACITY];
 
 	static struct Task* SelectedTask = NULL;
 
 	static float keyTimer = 0.0f;
 	static int lastKeyPressed = 0;
 
-	 if (index != data->tasks.currentSelectedTask) {
-		index = data->tasks.currentSelectedTask;
-		if (index >= 0) {
-			strcpy(str_buffer, data->tasks.tasks[index].desc.chars);
-			str_buffer_length = strlen(str_buffer);
-			str_buffer[str_buffer_length] = '\0';
+	if (data->tasks.currentSelectedTask == -1) return;
 
-			SelectedTask = &data->tasks.tasks[index];
+	 if (task_id != data->tasks.tasks[data->tasks.currentSelectedTask].id) {
+		task_id = data->tasks.tasks[data->tasks.currentSelectedTask].id;
+		if (task_id >= 0) {
+			SelectedTask = &data->tasks.tasks[data->tasks.currentSelectedTask];
+
+			snprintf(str_buffer, STR_BUFFER_CAPACITY, "%s", SelectedTask->desc.chars);
+			str_buffer_length = strlen(str_buffer);
 		} else {
 			str_buffer_length = 0;
 			str_buffer[str_buffer_length] = '\0';
@@ -553,64 +570,84 @@ void handle_edits_to_task(PomodoroData* data) {
 	}
 	if (SelectedTask == NULL) return;
 
-	// Repeat backspace
+	// Repeat Chars
 	if (IsKeyDown(lastKeyPressed)) {
 		keyTimer += GetFrameTime();
 		if (keyTimer >= data->options.REPEAT_DELAY){
 			if (keyTimer >= (data->options.REPEAT_DELAY + data->options.REPEAT_INTERVAL)) {
-				if (lastKeyPressed == KEY_BACKSPACE) {
-					Remove_Char_From_Task(SelectedTask);
+				switch (lastKeyPressed) {
+					case KEY_BACKSPACE: {
+						PRINT_S("Yes");
+						Remove_Char_From_Task(SelectedTask);
+						break;
+					}
+
+					default: {
+						if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
+							if (SelectedTask->desc.length >= (STR_BUFFER_CAPACITY - 3)) {
+								return;
+							}
+							Add_Char_To_Task(SelectedTask, GetCharPressed());
+						}
+						break;
+					}
 				}
 				keyTimer = data->options.REPEAT_DELAY;
 			}
 		}
 	} else {
-		lastKeyPressed = 0;
 		keyTimer = 0.0f;
 	}
 
-	while((lastKeyPressed = GetKeyPressed()) != 0) {
-		if (index >= 0 && index <= data->tasks.tasks_count && index == data->tasks.currentSelectedTask) {
-			switch (lastKeyPressed) {
-				case KEY_TAB: {
-					if (str_buffer_length > 0) {
-						strcpy(SelectedTask->desc.chars, str_buffer);
-						SelectedTask->desc.chars[str_buffer_length] = '\0';
-						SelectedTask->desc.length = str_buffer_length;
-					}
-					break;
-				}
+	lastKeyPressed = GetKeyPressed();
+	while(true) {
+		switch (lastKeyPressed) {
+			case KEY_ESCAPE: {
+				snprintf(SelectedTask->desc.chars, STR_BUFFER_CAPACITY, "%s", str_buffer);
+				SelectedTask->desc.length = strlen(SelectedTask->desc.chars);
 
-				case KEY_BACKSPACE: {
-					if (SelectedTask->desc.length <= 0) {
-						break;
-					}
-
-					Remove_Char_From_Task(SelectedTask);
-					break;
-				}
-
-				case KEY_ENTER: {
-					SelectedTask->desc.chars[SelectedTask->desc.length] = '\0';
-
-					index = -1;
-					data->tasks.currentSelectedTask = -1;
-					str_buffer_length = 0;
-					str_buffer[str_buffer_length] = '\0';
-					SelectedTask = NULL;
-					break;
-				}
-
-				default: {
-					if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-						if (SelectedTask->desc.length >= (STR_BUFFER_CAPACITY - 3)) {
-							return;
-						}
-						Add_Char_To_Task(SelectedTask, GetCharPressed());
-					}
-					break;
-				}
+				data->tasks.isEditing = false;
+				task_id = -1;
+				break;
 			}
+
+			case KEY_BACKSPACE: {
+				if (SelectedTask->desc.length <= 0) {
+					break;
+				}
+
+				Remove_Char_From_Task(SelectedTask);
+				break;
+			}
+
+			case KEY_ENTER: {
+				SelectedTask->desc.chars[SelectedTask->desc.length] = '\0';
+				data->tasks.isEditing = false;
+
+				task_id = -1;
+				str_buffer_length = 0;
+				str_buffer[str_buffer_length] = '\0';
+				SelectedTask = NULL;
+				break;
+			}
+
+			default: {
+				if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
+					if (SelectedTask->desc.length >= (STR_BUFFER_CAPACITY - 1)) {
+						return;
+					}
+					Add_Char_To_Task(SelectedTask, GetCharPressed());
+				}
+				break;
+			}
+		}
+
+		int temp = GetKeyPressed();
+		if (temp == 0) {
+			break;
+		} else {
+			lastKeyPressed = temp;
+			PRINT(lastKeyPressed);
 		}
 	}
 }
@@ -642,9 +679,9 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 		data->device = DEVICE_WATCH;
 	}
 
-	if (data->tasks.isEditing) {
-		handle_edits_to_task(data);
-	} else {
+	handle_edits_to_task(data);
+
+	if (!data->tasks.isEditing) {
 		if (IsKeyPressed(KEY_D)) {
 			g_debug_mode = !g_debug_mode;
 		}
@@ -1043,7 +1080,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 				}
 			}){
 				for (int i = 0; i < tasks.tasks_count; ++i) {
-					// if (tasks.isDragging && i == tasks.currentSelectedTask) continue;
+					if (tasks.isDragging) continue;
 					RenderTask(data, &tasks.tasks[i], i, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING), true);
 				}
 
