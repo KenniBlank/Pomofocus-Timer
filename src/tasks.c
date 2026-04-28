@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdbool.h>
-#include <string.h>
 #include <stdlib.h>
 #include "tasks.h"
 
@@ -15,6 +14,9 @@ int Init_Tasks(Tasks* task_arr) {
 	task_arr->__capacity__ = capacity;
 	task_arr->tasks_count = 0;
 	task_arr->currentSelectedTask = -1;
+	task_arr->isDragging = false;
+	task_arr->isEditing = true;
+	task_arr->allSelected = false;
 
 	return 0;
 }
@@ -26,13 +28,13 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 		.completed = false
 	};
 
-	newTask.desc.capacity = 124;
+	// TODO: error handling
+	newTask.desc.capacity = STR_BUFFER_CAPACITY;
 	newTask.desc.chars = malloc(sizeof(char) * newTask.desc.capacity);
 	if (newTask.desc.chars == NULL) {
 		return newTask;
 	}
-	strcpy(newTask.desc.chars, str_literal);
-	newTask.desc.length = strlen(newTask.desc.chars);
+	newTask.desc.length = snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
 
 	newTask.countExpected.capacity = 16; // MAGIC NUMBER fix later
 	newTask.countExpected.chars = malloc(sizeof(char) * newTask.countExpected.capacity);
@@ -44,12 +46,6 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 
 	return newTask;
 };
-
-// Task ModifyTask(Tasks *task_arr, int index, char *new_str, int count, int expected) {
-// 	// struct String clay_str;
-
-// 	// Task newTask = { .count = count, .expected = expected, .desc = clay_str };
-// };
 
 int Add_Task(Tasks* task_arr, struct Task newTask, bool rearrange) {
 	// Returns -2 on task being invalid
@@ -77,8 +73,22 @@ int Add_Task(Tasks* task_arr, struct Task newTask, bool rearrange) {
 	return 0;
 }
 
+void Add_Char_To_Task(Task* task, char ch) {
+	if (task && task->desc.length < (task->desc.capacity - 2)) {
+		task->desc.chars[task->desc.length] = ch;
+		task->desc.length++;
+		task->desc.chars[task->desc.length] = '\0';
+	}
+}
+
+void Remove_Char_From_Task(Task* task) {
+	if (task && task->desc.length > 0) {
+		task->desc.chars[--task->desc.length] = '\0';
+	}
+}
+
 void Select_Task(Tasks *tasks, int index, bool rearrange) {
-	// if (index == tasks->currentSelectedTask) tasks->currentSelectedTask = -1;
+	if (index == tasks->currentSelectedTask) tasks->currentSelectedTask = -1;
 	if (index > tasks->tasks_count || index < 0) return;
 	if (!rearrange) {
 		tasks->currentSelectedTask = index;

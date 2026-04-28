@@ -38,6 +38,7 @@
 
 #define APP_TITLE "PomoFocus Timer" // Pomo means tomato btw
 #define PRINT(variable) printf(#variable " = %g\n", variable); fflush(stdout);
+#define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
 
 // GLOBAL variables
 bool g_reinit_clay;
@@ -137,6 +138,10 @@ typedef struct {
 	int focusCount;
 	int FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK; // Great name
 
+	float REPEAT_DELAY; // How much time to wait to activate repeat
+	float REPEAT_INTERVAL; // How much time per repeat
+
+	float SCROLL_MULTIPLIER;
 	bool rearrangeTaskOnSelect;
 } Options;
 
@@ -201,7 +206,10 @@ int initialize_data(PomodoroData* data) {
 		.options = {
 			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = 3,
 			.focusCount = 0,
-			.rearrangeTaskOnSelect = true
+			.rearrangeTaskOnSelect = true,
+			.REPEAT_DELAY = 0.30f, // 300ms
+			.REPEAT_INTERVAL = 0.03f, // 30ms
+			.SCROLL_MULTIPLIER = 10.0f
 		},
 		.stats = {
 			.totalFocusCount = 0
@@ -323,7 +331,9 @@ int main(void) {
 	}
 
 	Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
+
 	SetTargetFPS(24);
+	SetExitKey(KEY_NULL);
 
 	while (!WindowShouldClose()) {
 		HANDLE_EVENTS(&totalMemorySize, &clayMemory, &pomo_data);
@@ -406,7 +416,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 	}
 }
 
-void RenderTask(PomodoroData *data, struct Task task, int taskIndex, int TXT_COLOR, int FONT_ID, int font_size, int letter_spacing) {
+void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_COLOR, int FONT_ID, int font_size, int letter_spacing, bool calledFromTasks) {
 	Clay_LayoutConfig layout = {
 		.layoutDirection = CLAY_LEFT_TO_RIGHT,
 		.padding = {
@@ -414,44 +424,81 @@ void RenderTask(PomodoroData *data, struct Task task, int taskIndex, int TXT_COL
 			.bottom = getFontHelper(data, BASE_FONT_SIZE),
 			.left = 0,
 			.right = 1
-		}
+		},
+		.childGap = getFontHelper(data, HEADER2) * 2
 	};
 
-	if (data->tasks.currentSelectedTask != taskIndex) {
-		float borderWidth = getFontHelper(data, BORDER_WIDTH * 2);
+	if (!calledFromTasks) layout.childGap = 0;
 
-		layout.childGap = getFontHelper(data, HEADER2) * 2;
-	}
+	float borderWidth = getFontHelper(data, BORDER_WIDTH * 2);
+	borderWidth = (borderWidth > 1.0f) ? borderWidth: 1.0f;
 
 	CLAY_AUTO_ID({
 		.layout = layout,
 	}) {
 		if (Clay_Hovered()) {
+			// if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+			// 	data->tasks.isDragging = true;
 			if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
 				Select_Task(&data->tasks, taskIndex, data->options.rearrangeTaskOnSelect);
 			}
 		}
-		CLAY_AUTO_ID({
-			.layout = {
-				.sizing = {
-					.width = CLAY_SIZING_FIT(0),
-					.height = CLAY_SIZING_FIT(0)
+
+		if (taskIndex == data->tasks.currentSelectedTask && calledFromTasks) {
+			CLAY(CLAY_ID("Selected Text"), {
+				.layout = {
+					.sizing = {
+						.width = CLAY_SIZING_FIT(0),
+						.height = CLAY_SIZING_FIT(0)
+					},
+					.padding = CLAY_PADDING_ALL(getFontHelper(data, BASE_FONT_SIZE)),
+					.childAlignment = {
+						.x = CLAY_ALIGN_X_LEFT,
+						.y = CLAY_ALIGN_Y_TOP
+					},
 				},
-				.childAlignment = {
-					.x = CLAY_ALIGN_X_LEFT,
-					.y = CLAY_ALIGN_Y_TOP
+				.border = {
+					.color = data->colors[TXT_COLOR],
+					.width = CLAY_BORDER_OUTSIDE(borderWidth)
 				}
+			}) {
+				Add_Char_To_Task(task, '|');
+
+				CLAY_TEXT(STRING_TO_CLAY_STRING(task->desc), {
+					.fontSize = font_size,
+					.fontId = FONT_ID,
+					.textColor = data->colors[TXT_COLOR],
+					.letterSpacing = letter_spacing,
+					.wrapMode = CLAY_TEXT_WRAP_WORDS,
+					.textAlignment = CLAY_TEXT_ALIGN_LEFT
+				});
+
+				Remove_Char_From_Task(task);
 			}
-		}) {
-			CLAY_TEXT(STRING_TO_CLAY_STRING(task.desc), {
-				.fontSize = font_size,
-				.fontId = FONT_ID,
-				.textColor = data->colors[TXT_COLOR],
-				.letterSpacing = letter_spacing,
-				.wrapMode = CLAY_TEXT_WRAP_WORDS,
-				.textAlignment = CLAY_TEXT_ALIGN_LEFT
-			});
+		} else {
+			CLAY_AUTO_ID({
+				.layout = {
+					.sizing = {
+						.width = CLAY_SIZING_FIT(0),
+						.height = CLAY_SIZING_FIT(0)
+					},
+					.childAlignment = {
+						.x = CLAY_ALIGN_X_LEFT,
+						.y = CLAY_ALIGN_Y_TOP
+					},
+				}
+			}) {
+				CLAY_TEXT(STRING_TO_CLAY_STRING(task->desc), {
+					.fontSize = font_size,
+					.fontId = FONT_ID,
+					.textColor = data->colors[TXT_COLOR],
+					.letterSpacing = letter_spacing,
+					.wrapMode = CLAY_TEXT_WRAP_WORDS,
+					.textAlignment = CLAY_TEXT_ALIGN_LEFT
+				});
+			}
 		}
+
 
 		CLAY_AUTO_ID({
 			.layout = {
@@ -465,7 +512,7 @@ void RenderTask(PomodoroData *data, struct Task task, int taskIndex, int TXT_COL
 				}
 			}
 		}) {
-			CLAY_TEXT(STRING_TO_CLAY_STRING(task.countExpected), {
+			CLAY_TEXT(STRING_TO_CLAY_STRING(task->countExpected), {
 				.fontSize = font_size,
 				.fontId = FONT_ID,
 				.textColor = data->colors[TXT_COLOR],
@@ -477,16 +524,107 @@ void RenderTask(PomodoroData *data, struct Task task, int taskIndex, int TXT_COL
 	}
 }
 
+// Am gonna check on zed's issue real quick
+void handle_edits_to_task(PomodoroData* data) {
+	static int index = -1;
+
+	static char str_buffer[STR_BUFFER_CAPACITY];
+	static int str_buffer_length = 0;
+
+	static struct Task* SelectedTask = NULL;
+
+	static float keyTimer = 0.0f;
+	static int lastKeyPressed = 0;
+
+	 if (index != data->tasks.currentSelectedTask) {
+		index = data->tasks.currentSelectedTask;
+		if (index >= 0) {
+			strcpy(str_buffer, data->tasks.tasks[index].desc.chars);
+			str_buffer_length = strlen(str_buffer);
+			str_buffer[str_buffer_length] = '\0';
+
+			SelectedTask = &data->tasks.tasks[index];
+		} else {
+			str_buffer_length = 0;
+			str_buffer[str_buffer_length] = '\0';
+
+			SelectedTask = NULL;
+		}
+	}
+	if (SelectedTask == NULL) return;
+
+	// Repeat backspace
+	if (IsKeyDown(lastKeyPressed)) {
+		keyTimer += GetFrameTime();
+		if (keyTimer >= data->options.REPEAT_DELAY){
+			if (keyTimer >= (data->options.REPEAT_DELAY + data->options.REPEAT_INTERVAL)) {
+				if (lastKeyPressed == KEY_BACKSPACE) {
+					Remove_Char_From_Task(SelectedTask);
+				}
+				keyTimer = data->options.REPEAT_DELAY;
+			}
+		}
+	} else {
+		lastKeyPressed = 0;
+		keyTimer = 0.0f;
+	}
+
+	while((lastKeyPressed = GetKeyPressed()) != 0) {
+		if (index >= 0 && index <= data->tasks.tasks_count && index == data->tasks.currentSelectedTask) {
+			switch (lastKeyPressed) {
+				case KEY_TAB: {
+					if (str_buffer_length > 0) {
+						strcpy(SelectedTask->desc.chars, str_buffer);
+						SelectedTask->desc.chars[str_buffer_length] = '\0';
+						SelectedTask->desc.length = str_buffer_length;
+					}
+					break;
+				}
+
+				case KEY_BACKSPACE: {
+					if (SelectedTask->desc.length <= 0) {
+						break;
+					}
+
+					Remove_Char_From_Task(SelectedTask);
+					break;
+				}
+
+				case KEY_ENTER: {
+					SelectedTask->desc.chars[SelectedTask->desc.length] = '\0';
+
+					index = -1;
+					data->tasks.currentSelectedTask = -1;
+					str_buffer_length = 0;
+					str_buffer[str_buffer_length] = '\0';
+					SelectedTask = NULL;
+					break;
+				}
+
+				default: {
+					if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
+						if (SelectedTask->desc.length >= (STR_BUFFER_CAPACITY - 3)) {
+							return;
+						}
+						Add_Char_To_Task(SelectedTask, GetCharPressed());
+					}
+					break;
+				}
+			}
+		}
+	}
+}
+
 static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, PomodoroData* data) {
 	// CLAY SPECIFIC EVENTS:
+	Clay_SetLayoutDimensions((Clay_Dimensions) {.width = GetScreenWidth(), .height = GetScreenHeight()});
+
 	Vector2 mousePosition = GetMousePosition();
 	Vector2 scrollDelta = GetMouseWheelMoveV();
-	const float MULTIPLIER = 10.0f;
 
-	// Resize, Click and Hover, Scroll Data:
-	Clay_SetLayoutDimensions((Clay_Dimensions) {.width = GetScreenWidth(), .height = GetScreenHeight()});
+	Clay_UpdateScrollContainers(true, (Clay_Vector2) { scrollDelta.x * data->options.SCROLL_MULTIPLIER, scrollDelta.y * data->options.SCROLL_MULTIPLIER }, GetFrameTime());
+
 	Clay_SetPointerState((Clay_Vector2) { mousePosition.x, mousePosition.y }, IsMouseButtonDown(0));
-	Clay_UpdateScrollContainers(true, (Clay_Vector2) { scrollDelta.x * MULTIPLIER, scrollDelta.y * MULTIPLIER }, GetFrameTime());
 
 	if (g_reinit_clay) {
 		*totalMemorySize = Clay_MinMemorySize();
@@ -504,33 +642,40 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 		data->device = DEVICE_WATCH;
 	}
 
-	// Keyboard events
-	if (IsKeyPressed(KEY_D)) {
-		g_debug_mode = !g_debug_mode;
+	if (data->tasks.isEditing) {
+		handle_edits_to_task(data);
+	} else {
+		if (IsKeyPressed(KEY_D)) {
+			g_debug_mode = !g_debug_mode;
+		}
+		if (IsKeyPressed(KEY_T)) {
+			g_dark_mode = !g_dark_mode;
+		}
+		if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+			if (IsKeyDown(KEY_KP_ADD) || IsKeyDown(KEY_EQUAL)) {
+				g_UI_SCALE += 0.1f;
+			} else if (IsKeyDown(KEY_MINUS)) {
+				g_UI_SCALE -= 0.1f;
+			} else {
+				Vector2 scrollDelta = GetMouseWheelMoveV();
+				g_UI_SCALE += scrollDelta.y;
+			}
+
+			if (IsKeyDown(KEY_ZERO)) {
+				g_UI_SCALE = 2.0f;
+			}
+
+			if (g_UI_SCALE < 0.8f) {
+				g_UI_SCALE = 0.8f;
+			}
+
+			printf("Gui Scale: %.2f\n", g_UI_SCALE);
+			fflush(stdout);
+		}
 	}
-	if (IsKeyPressed(KEY_T)) {
-		g_dark_mode = !g_dark_mode;
-	}
-	if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
-		if (IsKeyDown(KEY_KP_ADD) || IsKeyDown(KEY_EQUAL)) {
-			g_UI_SCALE += 0.1f;
-		} else if (IsKeyDown(KEY_MINUS)) {
-			g_UI_SCALE -= 0.1f;
-		} else {
-			Vector2 scrollDelta = GetMouseWheelMoveV();
-			g_UI_SCALE += scrollDelta.y;
-		}
 
-		if (IsKeyDown(KEY_ZERO)) {
-			g_UI_SCALE = 2.0f;
-		}
-
-		if (g_UI_SCALE < 0.8f) {
-			g_UI_SCALE = 0.8f;
-		}
-
-		printf("Gui Scale: %.2f\n", g_UI_SCALE);
-		fflush(stdout);
+	if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) {
+		data->tasks.isDragging = false;
 	}
 }
 
@@ -794,7 +939,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 							.color = data->colors[COLOR_TXT_DEFAULT]
 						},
 					}) {
-						RenderTask(data, tasks.tasks[tasks.currentSelectedTask], tasks.currentSelectedTask, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, HEADER3), getFontHelper(data, LETTER_SPACING));
+						RenderTask(data, &tasks.tasks[tasks.currentSelectedTask], tasks.currentSelectedTask, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, HEADER3), getFontHelper(data, LETTER_SPACING), false);
 						CLAY_AUTO_ID({});
 					}
 				}
@@ -818,7 +963,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 					// TODO: Better color for selected and clickables
 					RenderButton(str_Focus, data->appState == STATE_FOCUS_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 					RenderButton(str_Short_Break, data->appState == STATE_SHORT_BREAK_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
-					RenderButton(str_Long_Break, data->appState == STATE_SHORT_BREAK_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderButton(str_Long_Break, data->appState == STATE_LONG_BREAK_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 				}
 			}
 
@@ -866,36 +1011,6 @@ void Device_Smart_Phone(PomodoroData* data) {
 					getFontHelper(data, LETTER_SPACING)
 				);
 			}
-
-			// TODO: Fix it
-			if (data->appState % 2 != 0) {
-				if (tasks.currentSelectedTask >= 0 && tasks.currentSelectedTask < tasks.tasks_count) {
-					CLAY_AUTO_ID({
-						.clip = {
-							.vertical = true,
-							.childOffset = Clay_GetScrollOffset()
-						},
-						.layout = {
-							.sizing = {
-								.width = CLAY_SIZING_FIXED(WIDTH),
-								.height = CLAY_SIZING_FIT(0, getFontHelper(data, HEADER3 * 3)),
-							},
-							.padding = {
-								.top = getFontHelper(data, PARAGRAPH)
-							}
-
-						},
-						.border = {
-							.width = {
-								.top =  borderWidth
-							},
-							.color = data->colors[COLOR_TXT_DEFAULT]
-						},
-					}) {
-						RenderTask(data, tasks.tasks[tasks.currentSelectedTask], tasks.currentSelectedTask, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, HEADER3), getFontHelper(data, LETTER_SPACING));
-					}
-				}
-			}
 		}
 
 		if (data->appState % 2 != 0) {
@@ -928,9 +1043,11 @@ void Device_Smart_Phone(PomodoroData* data) {
 				}
 			}){
 				for (int i = 0; i < tasks.tasks_count; ++i) {
-					if (i == tasks.currentSelectedTask) continue;
-					RenderTask(data, tasks.tasks[i], i, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					// if (tasks.isDragging && i == tasks.currentSelectedTask) continue;
+					RenderTask(data, &tasks.tasks[i], i, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING), true);
 				}
+
+				// TODO: render dragging element and if it's border and another task's border cross more than 50% put it up of that task
 			}
 		}
 	}
