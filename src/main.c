@@ -1,6 +1,7 @@
 // TODOs:
-// - [ ] Modifing Task Desc, Count, Expected
+// - [~] Modifing Task Desc, Count, Expected
 	// - [ ] Add repeating keys option + CTRL + A to select all +
+	// - [ ] Add keys left-right edit option to task
 	// - [ ] New Task
 
 // - [ ] Add visual cue to selected task, tick for completed task, modify focus count on pomodoro counts
@@ -11,7 +12,7 @@
 // - [ ] On timer going off, send notification, and a signal to system: so that it can trigger some action
 // - [ ] Optimize to use as little memory as possible
 // - [ ] Compile for release: .exe, .flatpak, .deb, nah not snap and so on, maybe use raylib's build template
-// - [ ] Push to github
+// - [ ] On error: notify about the error, maybe a small notification that goes away in 3 seconds inside app itself
 
 #include <math.h>
 #include <stdio.h>
@@ -363,7 +364,6 @@ int main(void) {
 					pomo_data.stats.stats[pomo_data.stats.index].breakTime += pomo_data.timerConstraints.time_constants[pomo_data.appState >> 1];
 					pomo_data.appState = pomo_data.appState == STATE_FOCUS? STATE_SHORT_BREAK_PAUSED: STATE_FOCUS_PAUSED;
 				}
-				PRINT((double) pomo_data.options.focusCount);
 				pomo_data.timerConstraints.timer = pomo_data.timerConstraints.time_constants[pomo_data.appState >> 1];
 			} else {
 				pomo_data.timerConstraints.timer -= GetFrameTime();
@@ -448,6 +448,16 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 	float borderWidth = getFontHelper(data, BORDER_WIDTH * 2);
 	borderWidth = (borderWidth > 1.0f) ? borderWidth: 1.0f;
 
+	Clay_BorderElementConfig eborder = {
+		.color = data->colors[TXT_COLOR],
+		.width = CLAY_BORDER_OUTSIDE(borderWidth)
+	};
+	Clay_CornerRadius ecornerRadius = CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_WIDTH * 4));
+	Clay_Padding epadding = CLAY_PADDING_ALL(font_size / 2); // TODO: Clay doesn't handle left right padding well, find alternative
+	Clay_BorderElementConfig _border = {};
+	Clay_CornerRadius _cornerRadius = {};
+	Clay_Padding _padding = {};
+
 	CLAY_AUTO_ID({
 		.layout = layout,
 	}) {
@@ -456,38 +466,26 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				if (data->options.onTaskSwitchResetTimer && !(data->tasks.currentSelectedTask == taskIndex)) {
 					data->timerConstraints.timer = data->timerConstraints.time_constants[data->appState >> 1];
 				}
-
 				Select_Task(&data->tasks, taskIndex, data->options.rearrangeTaskOnSelect);
 				Clay_UpdateScrollContainers(true, (Clay_Vector2) { .x = 0.0f, .y = 0.0f }, GetFrameTime());
 			}
 		}
 
 		if (taskIndex == data->tasks.currentSelectedTask) {
-			Clay_BorderElementConfig border = {};
-			Clay_CornerRadius cornerRadius = {};
-			Clay_Padding padding = {};
-
-			if (data->tasks.isEditing == IS_EDITING_TASK_DESC) { // TODO: special if editing task
-				border.color = data->colors[TXT_COLOR];
-				border.width = (Clay_BorderWidth) CLAY_BORDER_OUTSIDE(borderWidth);
-				cornerRadius = (Clay_CornerRadius) CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_WIDTH * 4));
-				padding = (Clay_Padding) CLAY_PADDING_ALL(font_size / 2); // TODO: Clay doesn't handle left right padding well, find alternative
-			}
-
 			CLAY_AUTO_ID({
 				.layout = {
 					.sizing = {
 						.width = CLAY_SIZING_FIT(0),
 						.height = CLAY_SIZING_FIT(0)
 					},
-					.padding = padding,
+					.padding = data->tasks.isEditing == IS_EDITING_TASK_DESC? epadding: _padding,
 					.childAlignment = {
 						.x = CLAY_ALIGN_X_CENTER,
 						.y = CLAY_ALIGN_Y_CENTER
 					},
 				},
-				.border = border,
-				.cornerRadius = cornerRadius,
+				.border = data->tasks.isEditing == IS_EDITING_TASK_DESC? eborder: _border,
+				.cornerRadius = data->tasks.isEditing == IS_EDITING_TASK_DESC? ecornerRadius: _cornerRadius,
 			}) {
 				if (Clay_Hovered()) {
 					if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -527,7 +525,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 			}
 		}
 
-		CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_FIXED(getFontHelper(data, PARAGRAPH))}}});
+		CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_FIXED(getFontHelper(data, HEADER5))}}});
 		CLAY_AUTO_ID({
 			.layout = {
 				.sizing = {
@@ -536,54 +534,45 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				},
 				.childAlignment = {
 					.x = CLAY_ALIGN_X_RIGHT,
-					.y = CLAY_ALIGN_Y_TOP
+					.y = CLAY_ALIGN_Y_CENTER
 				}
 			}
 		}) {
-			Clay_String str = {
-				.chars = task->s_count,
-				.length = S_CAPACITY,
-				.isStaticallyAllocated = true,
-			};
-			CLAY_TEXT(str, {
-				.fontSize = font_size,
-				.fontId = FONT_ID,
-				.textColor = data->colors[TXT_COLOR],
-				.letterSpacing = letter_spacing,
-				.wrapMode = CLAY_TEXT_WRAP_WORDS,
-				.textAlignment = CLAY_TEXT_ALIGN_RIGHT
-			});
-
-			str.chars = " / ";
-			CLAY_TEXT(str, {
-				.fontSize = font_size,
-				.fontId = FONT_ID,
-				.textColor = data->colors[TXT_COLOR],
-				.letterSpacing = letter_spacing,
-				.wrapMode = CLAY_TEXT_WRAP_WORDS,
-				.textAlignment = CLAY_TEXT_ALIGN_RIGHT
-			});
-
-			str.chars = task->s_expected;
-			CLAY_TEXT(str, {
-				.fontSize = font_size,
-				.fontId = FONT_ID,
-				.textColor = data->colors[TXT_COLOR],
-				.letterSpacing = letter_spacing,
-				.wrapMode = CLAY_TEXT_WRAP_WORDS,
-				.textAlignment = CLAY_TEXT_ALIGN_RIGHT
-			});
+			CLAY_AUTO_ID({
+				.layout = {
+					.sizing = {
+						.width = CLAY_SIZING_FIT(0),
+						.height = CLAY_SIZING_FIT(0)
+					},
+					.padding = data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED && taskIndex == data->tasks.currentSelectedTask? epadding: _padding,
+				},
+				.border = data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED && taskIndex == data->tasks.currentSelectedTask? eborder: _border,
+				.cornerRadius = data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED && taskIndex == data->tasks.currentSelectedTask? ecornerRadius: _cornerRadius,
+			}) {
+				if (Clay_Hovered()) {
+					if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+						data->tasks.isEditing = IS_EDITING_TASK_COUNT_EXPECTED;
+					}
+				}
+				CLAY_TEXT(STRING_TO_CLAY_STRING(task->count_expected), {
+					.fontSize = font_size,
+					.fontId = FONT_ID,
+					.textColor = data->colors[TXT_COLOR],
+					.letterSpacing = letter_spacing,
+					.wrapMode = CLAY_TEXT_WRAP_WORDS,
+					.textAlignment = CLAY_TEXT_ALIGN_RIGHT
+				});
+			}
 		}
 	}
 }
 
-static int handle_String_edits(char *chars, int capacity, int *length, Options* options) {
+static int handle_String_edits(struct String *selectedString, Options* options) {
 	// -1: Error
 	// 0: Nothing
 	// 1: Pressed Enter
 	// 2: Revert Back
-	if (chars == NULL || length == NULL || options == NULL) return -1;
-
+	if (selectedString == NULL) return -1;
 	static float keyTimer = 0.0f;
 	static int lastKeyPressed = 0;
 
@@ -594,21 +583,19 @@ static int handle_String_edits(char *chars, int capacity, int *length, Options* 
 			if (keyTimer >= (options->REPEAT_DELAY + options->REPEAT_INTERVAL)) {
 				switch (lastKeyPressed) {
 					case KEY_BACKSPACE: {
-						if (*length > 0) {
-							*length += 1;
-							chars[*length] = '\0';
+						if (selectedString->length > 0) {
+							selectedString->chars[--selectedString->length] = '\0';
 						}
 						break;
 					}
 
 					default: {
 						if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-							if (*length >= (capacity - 1)) {
+							if (selectedString->length>= (selectedString->capacity - 1)) {
 								break;
 							}
-							chars[*length] = GetCharPressed();
-							*length += 1;
-							chars[*length] = '\0';
+							selectedString->chars[selectedString->length++] = GetCharPressed();
+							selectedString->chars[selectedString->length] = '\0';
 						}
 						break;
 					}
@@ -627,21 +614,19 @@ static int handle_String_edits(char *chars, int capacity, int *length, Options* 
 			case KEY_ESCAPE: return 2;
 
 			case KEY_BACKSPACE: {
-				if (length > 0) {
-					*length -= 1;
-					chars[*length] = '\0';
+				if (selectedString->length > 0) {
+					selectedString->chars[--selectedString->length] = '\0';
 				}
 				break;
 			}
 
 			default: {
 				if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-					if (*length >= (capacity - 1)) {
+					if (selectedString->length>= (selectedString->capacity - 1)) {
 						break;
 					}
-					chars[*length] = GetCharPressed();
-					*length += 1;
-					chars[*length] = '\0';
+					selectedString->chars[selectedString->length++] = GetCharPressed();
+					selectedString->chars[selectedString->length] = '\0';
 				}
 				break;
 			}
@@ -663,59 +648,47 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 
 	static char str_buffer[STR_BUFFER_CAPACITY];
 	static int str_buffer_length = 0;
-	// static struct String* SelectedString = NULL;
-
-	static char *chars = NULL;
-	static int *length = NULL;
-	static int capacity = 0;
-
+	static struct String* SelectedString = NULL;
 	static int task_id = -1;
 
 	if (task_id != data->tasks.tasks[data->tasks.currentSelectedTask].id) {
 		str_buffer_length = 0;
 		str_buffer[str_buffer_length] = '\0';
-
 		task_id = data->tasks.tasks[data->tasks.currentSelectedTask].id;
-
-		switch (data->tasks.isEditing) {
-			case IS_EDITING_TASK_DESC: {
-				chars = data->tasks.tasks[data->tasks.currentSelectedTask].desc.chars;
-				length = &data->tasks.tasks[data->tasks.currentSelectedTask].desc.length;
-				capacity = data->tasks.tasks[data->tasks.currentSelectedTask].desc.capacity;
-				snprintf(str_buffer, capacity, "%s", chars);
-				break;
-			}
-
-			case IS_EDITING_TASK_COUNT: break;
-			case IS_EDITING_TASK_EXPECTED: break;
-			case IS_NOT_EDITING: break;
-		}
+		SelectedString = data->tasks.isEditing == IS_EDITING_TASK_DESC? &data->tasks.tasks[data->tasks.currentSelectedTask].desc: &data->tasks.tasks[data->tasks.currentSelectedTask].count_expected;
+		snprintf(str_buffer, STR_BUFFER_CAPACITY, "%s", SelectedString->chars);
 		str_buffer_length = strlen(str_buffer);
 	}
-	if (data->tasks.isEditing == IS_EDITING_TASK_DESC && chars == NULL) return;
-
-	switch (handle_String_edits(chars, capacity, length, &data->options)) {
+	if (SelectedString == NULL) return;
+	switch (handle_String_edits(SelectedString, &data->options)) {
 		case 0: break;
 
 		case 1: {
-			chars[*length] = '\0';
-			data->tasks.isEditing = IS_NOT_EDITING;
-			task_id = -1;
-
-			length = NULL;
-			chars = NULL;
-			break;
+			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
+				struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
+				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) == 2) {
+					snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
+					task->count_expected.length = strlen(task->count_expected.chars);
+					goto _key_enter_;
+				}
+			} else {
+				_key_enter_:
+				SelectedString->chars[SelectedString->length] = '\0';
+				data->tasks.isEditing = IS_NOT_EDITING;
+				task_id = -1;
+				SelectedString = NULL;
+				break;
+			}
 		}
 
 		case -1:
 		case 2: {
-			snprintf(chars, capacity, "%s", str_buffer);
-			*length = strlen(chars);
+			snprintf(SelectedString->chars, SelectedString->capacity, "%s", str_buffer);
+			SelectedString->length = strlen(SelectedString->chars);
 			data->tasks.isEditing = IS_NOT_EDITING;
 			task_id = -1;
 
-			length = NULL;
-			chars = NULL;
+			SelectedString = NULL;
 			break;
 		}
 	}
@@ -914,6 +887,10 @@ void Device_Smart_Phone(PomodoroData* data) {
 	str_Start_STOP.length = strlen(str_Start_STOP.chars);
 
 	bool longerTxtOnButtonCondition = GetScreenWidth() > (DEVICE_SMART_PHONE_W + 100) * g_UI_SCALE;
+
+	Clay_String app_title = {.chars = longerTxtOnButtonCondition ? APP_TITLE : "PomoFocus", .isStaticallyAllocated = false};
+	app_title.length = strlen(app_title.chars);
+
 	Clay_String str_Focus = {.chars = longerTxtOnButtonCondition ? "  Focus  ": " Focus ", .isStaticallyAllocated = false};
 	str_Focus.length = strlen(str_Focus.chars);
 
@@ -973,13 +950,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 					.color = data->colors[COLOR_TXT_DEFAULT]
 				},
 			}){
-				Clay_String str = {
-					.chars = APP_TITLE,
-					.length = strlen(APP_TITLE),
-					.isStaticallyAllocated = false
-				};
-
-				CLAY_TEXT(str, {
+				CLAY_TEXT(app_title, {
 					.fontSize = getFontHelper(data, HEADER1),
 					.fontId = FONT_ID_32_PX,
 					.letterSpacing = FONT_SIZE(LETTER_SPACING),
@@ -1005,7 +976,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 				.padding = {
 					.left = getFontHelper(data, HEADER2),
 					.right = getFontHelper(data, HEADER2),
-					.top = getFontHelper(data, HEADER1),
+					.top = getFontHelper(data, HEADER2),
 					.bottom = getFontHelper(data, HEADER1)
 				},
 				.childGap = getFontHelper(data, HEADER2)
@@ -1060,7 +1031,6 @@ void Device_Smart_Phone(PomodoroData* data) {
 					},
 					.cornerRadius = CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_RADIUS * 2))
 				}){
-					// TODO: Better color for selected and clickables
 					RenderButton(str_Focus, data->appState == STATE_FOCUS_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 					RenderButton(str_Short_Break, data->appState == STATE_SHORT_BREAK_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 					RenderButton(str_Long_Break, data->appState == STATE_LONG_BREAK_PAUSED? COLOR_BUTTON_FSL_BACKGROUND_SELECTED: COLOR_BUTTON_FSL_BACKGROUND, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
@@ -1078,7 +1048,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 						.x = CLAY_ALIGN_X_CENTER,
 						.y = CLAY_ALIGN_Y_CENTER
 					},
-					.childGap = getFontHelper(data, PARAGRAPH)
+					.childGap = getFontHelper(data, HEADER3)
 				}
 			}) {
 				Clay_String str = {
@@ -1146,7 +1116,6 @@ void Device_Smart_Phone(PomodoroData* data) {
 					if (tasks.isDragging) continue;
 					RenderTask(data, i, WIDTH, COLOR_TXT_DEFAULT, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 				}
-
 				// TODO: render dragging element and if it's border and another task's border cross more than 50% put it up of that task
 			}
 		}

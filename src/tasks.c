@@ -36,14 +36,20 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	// TODO: error handling
 	newTask.desc.capacity = STR_BUFFER_CAPACITY;
 	newTask.desc.chars = malloc(sizeof(char) * newTask.desc.capacity);
-	if (newTask.desc.chars == NULL) {
-		return newTask;
-	}
+	if (newTask.desc.chars == NULL) return newTask;
 	snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
 	newTask.desc.length = strlen(newTask.desc.chars);
 
-	snprintf(newTask.s_count, S_CAPACITY, "%d", count);
-	snprintf(newTask.s_expected, S_CAPACITY, "%d", expected);
+	newTask.count_expected.capacity = STR_BUFFER_CAPACITY;
+	newTask.count_expected.chars = malloc(sizeof(char) * newTask.desc.capacity);
+	if (newTask.desc.chars == NULL) {
+		if (newTask.desc.chars) {
+			free(newTask.desc.chars);
+		}
+		return newTask;
+	}
+	snprintf(newTask.count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", count, expected);
+	newTask.count_expected.length = strlen(newTask.count_expected.chars);
 
 	return newTask;
 };
@@ -110,7 +116,8 @@ void Select_Task(Tasks *tasks, int index, bool rearrange) {
 int Add_Focus_Count_To_Task(Task *task) {
 	// TODO: case handling in case the task's expected string is not long enough
 	task->count++;
-	snprintf(task->s_count, S_CAPACITY, "%d", task->count);
+	snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
+	task->count_expected.length = strlen(task->count_expected.chars);
 	return 0;
 }
 
