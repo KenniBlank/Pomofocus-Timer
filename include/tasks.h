@@ -2,11 +2,14 @@
 #define TASKS_H
 
 #define STR_BUFFER_CAPACITY 256
+#define S_CAPACITY 3 // Its a magic number which influences all where it's used, never change it
 
 enum EDITING_STATUS {
 	IS_NOT_EDITING,
 	IS_EDITING_TASK_DESC,
-	IS_EDITING_TASK_COUNT_EXPECTED
+
+	IS_EDITING_TASK_COUNT,
+	IS_EDITING_TASK_EXPECTED,
 };
 
 struct String {
@@ -17,7 +20,10 @@ struct String {
 
 struct Task {
 	struct String desc;
-	struct String countExpected;
+
+	char s_count[S_CAPACITY];
+	char s_expected[S_CAPACITY];
+
 	int count;
 	int expected;
 

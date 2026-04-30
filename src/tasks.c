@@ -42,14 +42,8 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
 	newTask.desc.length = strlen(newTask.desc.chars);
 
-	newTask.countExpected.capacity = 16; // MAGIC NUMBER fix later
-	newTask.countExpected.chars = malloc(sizeof(char) * newTask.countExpected.capacity);
-	if (newTask.countExpected.chars == NULL) {
-		free(newTask.desc.chars);
-		return newTask;
-	}
-	snprintf(newTask.countExpected.chars, newTask.countExpected.capacity, "%d/%d", count, expected);
-	newTask.countExpected.length = strlen(newTask.countExpected.chars);
+	snprintf(newTask.s_count, S_CAPACITY, "%d", count);
+	snprintf(newTask.s_expected, S_CAPACITY, "%d", expected);
 
 	return newTask;
 };
@@ -59,7 +53,7 @@ int Add_Task(Tasks* task_arr, struct Task newTask, bool rearrange) {
 	// Returns -1 on being unable to add task to tasks
 	// Returns 0 on success
 
-	if (newTask.desc.chars == NULL || newTask.countExpected.chars == NULL) return -2;
+	if (newTask.desc.chars == NULL) return -2;
 	if (task_arr->__capacity__ < (task_arr->tasks_count + 1)) {
 		int newCapacity = task_arr->__capacity__ * 2;
 
@@ -110,13 +104,13 @@ void Select_Task(Tasks *tasks, int index, bool rearrange) {
 	}
 	tasks->tasks[0] = selectedTask;
 	tasks->currentSelectedTask = 0;
+	tasks->isEditing = IS_NOT_EDITING;
 }
 
 int Add_Focus_Count_To_Task(Task *task) {
 	// TODO: case handling in case the task's expected string is not long enough
 	task->count++;
-	snprintf(task->countExpected.chars, task->countExpected.capacity, "%d/%d", task->count, task->expected);
-	task->countExpected.length = strlen(task->countExpected.chars);
+	snprintf(task->s_count, S_CAPACITY, "%d", task->count);
 	return 0;
 }
 
@@ -133,9 +127,6 @@ void Remove_Task(Tasks* task_arr, int index) {
 void Clean_Tasks(Tasks *task_arr) {
 	if (task_arr->tasks) {
 		for (int i = 0; i < task_arr->tasks_count; i++) {
-			if (task_arr->tasks[i].countExpected.chars) {
-				free(task_arr->tasks[i].countExpected.chars);
-			}
 			if (task_arr->tasks[i].desc.chars) {
 				free(task_arr->tasks[i].desc.chars);
 			}
