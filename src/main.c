@@ -1,12 +1,13 @@
 // TODOs:
-// - [~] Modifing Task Desc, Count, Expected
+// - [ ] Modifing Task Desc, Count, Expected
 	// - [ ] Add repeating keys option + CTRL + A to select all +
 	// - [ ] New Task
 
 // - [ ] Add visual cue to selected task, tick for completed task, modify focus count on pomodoro counts
-// - [ ] Statistics
+// - [x] Statistics
 // - [ ] On complete sound for break and focus, different
 // - [ ] Save and Load System
+//
 // - [ ] On timer going off, send notification, and a signal to system: so that it can trigger some action
 // - [ ] Optimize to use as little memory as possible
 // - [ ] Compile for release: .exe, .flatpak, .deb, nah not snap and so on, maybe use raylib's build template
@@ -49,8 +50,6 @@
 
 // GLOBAL variables
 bool g_reinit_clay;
-bool g_debug_mode;
-bool g_dark_mode;
 float g_UI_SCALE;
 
 #define BASE_FONT_SIZE 16
@@ -142,6 +141,7 @@ typedef struct {
 } TimerConstraints;
 
 typedef struct {
+	float masterVolume;
 	int focusCount;
 	int FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK; // Great name
 
@@ -157,7 +157,7 @@ typedef struct {
 typedef struct {
 	AppState appState;
 	Device device;
-	Vector2 deviceDimensions;
+	Vector2 deviceDimensions; // TODO: set to whatever user has resized it to, while saving
 	TimerConstraints timerConstraints;
 	Clay_Color* colors;
 
@@ -195,17 +195,15 @@ static void HandleClayErrors(Clay_ErrorData errorData) {
 
 int initialize_data(PomodoroData* data) {
 	// Global Data
-	g_UI_SCALE = 2.0f;
-	g_debug_mode = false;
+	g_UI_SCALE = 2.0f; // TODO: set to 1 on release
 	g_reinit_clay = false;
-	g_dark_mode = false;
 
 	// Pomodata initialization
 	*data = (PomodoroData) {
 		.appState = STATE_FOCUS_PAUSED,
 		.deviceDimensions = {
-			.x = DEVICE_SMART_PHONE_W * 2,
-			.y = DEVICE_SMART_PHONE_H * 2,
+			.x = DEVICE_SMART_PHONE_W * g_UI_SCALE,
+			.y = DEVICE_SMART_PHONE_H * g_UI_SCALE,
 		},
 		.colors = NULL,
 		.sounds.sounds = NULL,
@@ -213,6 +211,7 @@ int initialize_data(PomodoroData* data) {
 		.timerConstraints.timerStr.chars = NULL,
 		.tasks = NULL,
 		.options = {
+			.masterVolume = 0.2f,
 			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = 3,
 			.focusCount = 0,
 			.rearrangeTaskOnSelect = true,
@@ -222,6 +221,9 @@ int initialize_data(PomodoroData* data) {
 			.onTaskSwitchResetTimer = true
 		},
 		.stats = {
+			.stats = NULL,
+			.index = 0,
+			.capacity = 0,
 			.totalFocusCount = 0
 		}
 	};
@@ -353,12 +355,12 @@ int main(void) {
 					pomo_data.options.focusCount++;
 					Add_Focus_Count_To_Task(&pomo_data.tasks.tasks[pomo_data.tasks.currentSelectedTask]);
 				}
-				if (pomo_data.options.focusCount > 3) {
+				if (pomo_data.options.focusCount > pomo_data.options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK) {
 					pomo_data.options.focusCount = 0;
+					pomo_data.stats.stats[pomo_data.stats.index].focusTime += pomo_data.timerConstraints.time_constants[FOCUS_TIMER];
 					pomo_data.appState = STATE_LONG_BREAK_PAUSED;
-					pomo_data.stats.totalFocusCount++;
-
 				} else {
+					pomo_data.stats.stats[pomo_data.stats.index].breakTime += pomo_data.timerConstraints.time_constants[pomo_data.appState >> 1];
 					pomo_data.appState = pomo_data.appState == STATE_FOCUS? STATE_SHORT_BREAK_PAUSED: STATE_FOCUS_PAUSED;
 				}
 				PRINT((double) pomo_data.options.focusCount);
@@ -389,7 +391,7 @@ int main(void) {
 
 void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR, Clay_Color* colors_array, int FONT_ID, int font_size, int letter_spacing) {
 	float border_width = FONT_SIZE(BORDER_WIDTH);
-	border_width = border_width > 1? border_width: 1;
+	border_width = border_width > 1.0f ? border_width: 1.0f;
 
 	float cornerRadius = FONT_SIZE(BORDER_RADIUS);
 	cornerRadius = (cornerRadius > 1.0f) ? cornerRadius: 0.0f;
@@ -397,7 +399,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 	CLAY(CLAY_SID(txt)) {
 		Clay_Color bg_color = colors_array[BG_COLOR];
 		if (Clay_Hovered()) {
-			bg_color.a -= 100;
+			bg_color.a -= 100.0f;
 		}
 
 		CLAY_AUTO_ID({
@@ -575,51 +577,43 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 	}
 }
 
-static void handle_edits_to_task(PomodoroData* data) {
-	static int task_id = -1;
-
-	static char str_buffer[STR_BUFFER_CAPACITY];
-	static int str_buffer_length = 0;
-
-	static struct String* SelectedString = NULL;
-	if (data->tasks.currentSelectedTask == -1 || !(data->tasks.isEditing == IS_EDITING_TASK_DESC)) return;
-	if (task_id != data->tasks.tasks[data->tasks.currentSelectedTask].id) {
-		str_buffer_length = 0;
-		str_buffer[str_buffer_length] = '\0';
-		task_id = data->tasks.tasks[data->tasks.currentSelectedTask].id;
-		SelectedString = &data->tasks.tasks[data->tasks.currentSelectedTask].desc;
-		snprintf(str_buffer, SelectedString->capacity, "%s", SelectedString->chars);
-		str_buffer_length = strlen(str_buffer);
-	}
-	if (SelectedString == NULL) return;
+static int handle_String_edits(char *chars, int capacity, int *length, Options* options) {
+	// -1: Error
+	// 0: Nothing
+	// 1: Pressed Enter
+	// 2: Revert Back
+	if (chars == NULL || length == NULL || options == NULL) return -1;
 
 	static float keyTimer = 0.0f;
 	static int lastKeyPressed = 0;
+
 	// Repeat Chars
 	if (IsKeyDown(lastKeyPressed)) {
 		keyTimer += GetFrameTime();
-		if (keyTimer >= data->options.REPEAT_DELAY){
-			if (keyTimer >= (data->options.REPEAT_DELAY + data->options.REPEAT_INTERVAL)) {
+		if (keyTimer >= options->REPEAT_DELAY){
+			if (keyTimer >= (options->REPEAT_DELAY + options->REPEAT_INTERVAL)) {
 				switch (lastKeyPressed) {
 					case KEY_BACKSPACE: {
-						if (SelectedString && SelectedString->length > 0) {
-							SelectedString->chars[--SelectedString->length] = '\0';
+						if (*length > 0) {
+							*length += 1;
+							chars[*length] = '\0';
 						}
 						break;
 					}
 
 					default: {
 						if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-							if (SelectedString->length >= (SelectedString->capacity - 1)) {
+							if (*length >= (capacity - 1)) {
 								break;
 							}
-							SelectedString->chars[SelectedString->length++] = GetCharPressed();
-							SelectedString->chars[SelectedString->length] = '\0';
+							chars[*length] = GetCharPressed();
+							*length += 1;
+							chars[*length] = '\0';
 						}
 						break;
 					}
 				}
-				keyTimer = data->options.REPEAT_DELAY;
+				keyTimer = options->REPEAT_DELAY;
 			}
 		}
 	} else {
@@ -629,39 +623,25 @@ static void handle_edits_to_task(PomodoroData* data) {
 	lastKeyPressed = GetKeyPressed();
 	while(lastKeyPressed) {
 		switch (lastKeyPressed) {
-			case KEY_ESCAPE: {
-				snprintf(SelectedString->chars, SelectedString->capacity, "%s", str_buffer);
-				SelectedString->length = strlen(SelectedString->chars);
-				data->tasks.isEditing = IS_NOT_EDITING;
-				task_id = -1;
-				break;
-			}
+			case KEY_ENTER: return 1;
+			case KEY_ESCAPE: return 2;
 
 			case KEY_BACKSPACE: {
-				if (SelectedString && SelectedString->length > 0) {
-					SelectedString->chars[--SelectedString->length] = '\0';
+				if (length > 0) {
+					*length -= 1;
+					chars[*length] = '\0';
 				}
-				break;
-			}
-
-			case KEY_ENTER: {
-				SelectedString->chars[SelectedString->length] = '\0';
-				data->tasks.isEditing = IS_NOT_EDITING;
-
-				task_id = -1;
-				str_buffer_length = 0;
-				str_buffer[str_buffer_length] = '\0';
-				SelectedString = NULL;
 				break;
 			}
 
 			default: {
 				if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-					if (SelectedString->length >= (SelectedString->capacity - 1)) {
+					if (*length >= (capacity - 1)) {
 						break;
 					}
-					SelectedString->chars[SelectedString->length++] = GetCharPressed();
-					SelectedString->chars[SelectedString->length] = '\0';
+					chars[*length] = GetCharPressed();
+					*length += 1;
+					chars[*length] = '\0';
 				}
 				break;
 			}
@@ -673,6 +653,70 @@ static void handle_edits_to_task(PomodoroData* data) {
 		} else {
 			lastKeyPressed = temp;
 			PRINT(lastKeyPressed);
+		}
+	}
+	return 0;
+}
+
+static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
+	if (data->tasks.currentSelectedTask == -1 || data->tasks.isEditing == IS_NOT_EDITING) return;
+
+	static char str_buffer[STR_BUFFER_CAPACITY];
+	static int str_buffer_length = 0;
+	// static struct String* SelectedString = NULL;
+
+	static char *chars = NULL;
+	static int *length = NULL;
+	static int capacity = 0;
+
+	static int task_id = -1;
+
+	if (task_id != data->tasks.tasks[data->tasks.currentSelectedTask].id) {
+		str_buffer_length = 0;
+		str_buffer[str_buffer_length] = '\0';
+
+		task_id = data->tasks.tasks[data->tasks.currentSelectedTask].id;
+
+		switch (data->tasks.isEditing) {
+			case IS_EDITING_TASK_DESC: {
+				chars = data->tasks.tasks[data->tasks.currentSelectedTask].desc.chars;
+				length = &data->tasks.tasks[data->tasks.currentSelectedTask].desc.length;
+				capacity = data->tasks.tasks[data->tasks.currentSelectedTask].desc.capacity;
+				snprintf(str_buffer, capacity, "%s", chars);
+				break;
+			}
+
+			case IS_EDITING_TASK_COUNT: break;
+			case IS_EDITING_TASK_EXPECTED: break;
+			case IS_NOT_EDITING: break;
+		}
+		str_buffer_length = strlen(str_buffer);
+	}
+	if (data->tasks.isEditing == IS_EDITING_TASK_DESC && chars == NULL) return;
+
+	switch (handle_String_edits(chars, capacity, length, &data->options)) {
+		case 0: break;
+
+		case 1: {
+			chars[*length] = '\0';
+			data->tasks.isEditing = IS_NOT_EDITING;
+			task_id = -1;
+
+			length = NULL;
+			chars = NULL;
+			break;
+		}
+
+		case -1:
+		case 2: {
+			snprintf(chars, capacity, "%s", str_buffer);
+			*length = strlen(chars);
+			data->tasks.isEditing = IS_NOT_EDITING;
+			task_id = -1;
+
+			length = NULL;
+			chars = NULL;
+			break;
 		}
 	}
 }
@@ -694,7 +738,6 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 		Clay_Initialize(*clayMemory, (Clay_Dimensions) { (float)GetScreenWidth(), (float)GetScreenHeight() }, (Clay_ErrorHandler) { HandleClayErrors, 0 });
 		g_reinit_clay = false;
 	}
-	Clay_SetDebugModeEnabled(g_debug_mode);
 
 	// UI
 	int screenWidth = GetScreenWidth();
@@ -704,15 +747,9 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 		data->device = DEVICE_WATCH;
 	}
 
-	handle_edits_to_task(data);
+	HANDLE_EDITS_TO_TASK(data);
 
-	if (!data->tasks.isEditing) {
-		if (IsKeyPressed(KEY_D)) {
-			g_debug_mode = !g_debug_mode;
-		}
-		if (IsKeyPressed(KEY_T)) {
-			g_dark_mode = !g_dark_mode;
-		}
+	if (data->tasks.isEditing == IS_NOT_EDITING) {
 		if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
 			if (IsKeyDown(KEY_KP_ADD) || IsKeyDown(KEY_EQUAL)) {
 				g_UI_SCALE += 0.1f;
@@ -739,6 +776,8 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 	if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) {
 		data->tasks.isDragging = false;
 	}
+
+	SetMasterVolume(data->options.masterVolume);
 }
 
 void Device_Smart_Watch(PomodoroData* data) {
@@ -884,7 +923,6 @@ void Device_Smart_Phone(PomodoroData* data) {
 	Clay_String str_Long_Break = {.chars = longerTxtOnButtonCondition ? "  Long Break  ": " Long ", .isStaticallyAllocated = false};
 	str_Long_Break.length = strlen(str_Long_Break.chars);
 
-
 	Tasks tasks = data->tasks;
 	CLAY_AUTO_ID({
 		.layout = {
@@ -903,7 +941,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 			},
 			.childGap = getFontHelper(data, PARAGRAPH)
 		},
-		.backgroundColor = RAYLIB_COLOR_TO_CLAY_COLOR(WHITE),
+		.backgroundColor = data->colors[COLOR_BACKGROUND_INACTIVE],
 	}) {
 		float WIDTH = 0.0f;
 		if (data->appState % 2 == 0) {
