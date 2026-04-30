@@ -1,16 +1,16 @@
 // TODOs:
-// - [x] Modifing Tasks
+// - [~] Modifing Tasks
 	// - [ ] Add repeating keys option + CTRL + A to select all +
+	// - [ ] New Task
 
-// - [ ] New Task
 // - [ ] Add visual cue to selected task, tick for completed task, modify focus count on pomodoro counts
 // - [ ] Statistics
 // - [ ] On complete sound for break and focus, different
 // - [ ] Save and Load System
+// - [ ] On timer going off, send notification, and a signal to system: so that it can trigger some action
 // - [ ] Optimize to use as little memory as possible
 // - [ ] Compile for release: .exe, .flatpak, .deb, nah not snap and so on, maybe use raylib's build template
 // - [ ] Push to github
-
 
 #include <math.h>
 #include <stdio.h>
@@ -18,8 +18,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-// #include "cJSON.h": Save and Load System
-// Here is the truth: I could make a .dat file for saving but i want the user to be able to easily be able to transfer over to other apps if this doesn't meet their requirements
+#include "cJSON.h"
 
 #include "raylib.h"
 
@@ -151,6 +150,8 @@ typedef struct {
 
 	float SCROLL_MULTIPLIER;
 	bool rearrangeTaskOnSelect; // Moves task to top
+
+	bool onTaskSwitchResetTimer;
 } Options;
 
 typedef struct {
@@ -217,7 +218,8 @@ int initialize_data(PomodoroData* data) {
 			.rearrangeTaskOnSelect = true,
 			.REPEAT_DELAY = 0.30f, // 300ms
 			.REPEAT_INTERVAL = 0.03f, // 30ms
-			.SCROLL_MULTIPLIER = 10.0f
+			.SCROLL_MULTIPLIER = 10.0f,
+			.onTaskSwitchResetTimer = true
 		},
 		.stats = {
 			.totalFocusCount = 0
@@ -425,6 +427,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 	}
 }
 
+// TODO: Have to rewrite it to handle logic better
 void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_COLOR, int FONT_ID, int font_size, int letter_spacing, bool calledFromTasks) {
 	Clay_LayoutConfig layout = {
 		.layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -447,9 +450,13 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 	}) {
 		if (Clay_Hovered()) {
 			if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+				if (data->options.onTaskSwitchResetTimer && !(data->tasks.currentSelectedTask == taskIndex)) {
+					data->timerConstraints.timer = data->timerConstraints.time_constants[data->appState >> 1];
+				}
+
 				Select_Task(&data->tasks, taskIndex, data->options.rearrangeTaskOnSelect);
 				Clay_UpdateScrollContainers(true, (Clay_Vector2) { .x = 0.0f, .y = 0.0f }, GetFrameTime());
-				data->tasks.isEditing = false;
+				data->tasks.isEditing = IS_EDITING_TASK_DESC;
 			}
 		}
 
@@ -457,7 +464,7 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 			Clay_BorderElementConfig border = {};
 			Clay_CornerRadius cornerRadius = {};
 			Clay_Padding padding = {};
-			if (data->tasks.isEditing) {
+			if (data->tasks.isEditing == IS_EDITING_TASK_DESC) { // TODO: special if editing task
 				border.color = data->colors[TXT_COLOR];
 				border.width = (Clay_BorderWidth) CLAY_BORDER_OUTSIDE(borderWidth);
 				cornerRadius = (Clay_CornerRadius) CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_WIDTH * 4));
@@ -477,11 +484,12 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 					},
 				},
 				.border = border,
-				.cornerRadius = cornerRadius
+				.cornerRadius = cornerRadius,
+				.backgroundColor = RAYLIB_COLOR_TO_CLAY_COLOR(MAGENTA)
 			}) {
 				if (Clay_Hovered()) {
 					if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-						data->tasks.isEditing = true;
+						data->tasks.isEditing = IS_EDITING_TASK_DESC;
 					}
 				}
 				CLAY_TEXT(STRING_TO_CLAY_STRING(task->desc), {
@@ -544,31 +552,24 @@ void RenderTask(PomodoroData *data, struct Task *task, int taskIndex, int TXT_CO
 static void handle_edits_to_task(PomodoroData* data) {
 	static int task_id = -1;
 
-	static int str_buffer_length = 0;
 	static char str_buffer[STR_BUFFER_CAPACITY];
+	static int str_buffer_length = 0;
 
-	static struct Task* SelectedTask = NULL;
+	static struct String* SelectedString = NULL;
 
 	static float keyTimer = 0.0f;
 	static int lastKeyPressed = 0;
 
-	if (data->tasks.currentSelectedTask == -1) return;
-
-	 if (task_id != data->tasks.tasks[data->tasks.currentSelectedTask].id) {
+	if (data->tasks.currentSelectedTask == -1 || !(data->tasks.isEditing == IS_EDITING_TASK_DESC)) return;
+	if (task_id != data->tasks.tasks[data->tasks.currentSelectedTask].id) {
+		str_buffer_length = 0;
+		str_buffer[str_buffer_length] = '\0';
 		task_id = data->tasks.tasks[data->tasks.currentSelectedTask].id;
-		if (task_id >= 0) {
-			SelectedTask = &data->tasks.tasks[data->tasks.currentSelectedTask];
-
-			snprintf(str_buffer, STR_BUFFER_CAPACITY, "%s", SelectedTask->desc.chars);
-			str_buffer_length = strlen(str_buffer);
-		} else {
-			str_buffer_length = 0;
-			str_buffer[str_buffer_length] = '\0';
-
-			SelectedTask = NULL;
-		}
+		SelectedString = &data->tasks.tasks[data->tasks.currentSelectedTask].desc;
+		snprintf(str_buffer, SelectedString->capacity, "%s", SelectedString->chars);
+		str_buffer_length = strlen(str_buffer);
 	}
-	if (SelectedTask == NULL) return;
+	if (SelectedString == NULL) return;
 
 	// Repeat Chars
 	if (IsKeyDown(lastKeyPressed)) {
@@ -577,17 +578,19 @@ static void handle_edits_to_task(PomodoroData* data) {
 			if (keyTimer >= (data->options.REPEAT_DELAY + data->options.REPEAT_INTERVAL)) {
 				switch (lastKeyPressed) {
 					case KEY_BACKSPACE: {
-						PRINT_S("Yes");
-						Remove_Char_From_Task(SelectedTask);
+						if (SelectedString && SelectedString->length > 0) {
+							SelectedString->chars[--SelectedString->length] = '\0';
+						}
 						break;
 					}
 
 					default: {
 						if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-							if (SelectedTask->desc.length >= (STR_BUFFER_CAPACITY - 3)) {
-								return;
+							if (SelectedString->length >= (SelectedString->capacity - 1)) {
+								break;
 							}
-							Add_Char_To_Task(SelectedTask, GetCharPressed());
+							SelectedString->chars[SelectedString->length++] = GetCharPressed();
+							SelectedString->chars[SelectedString->length] = '\0';
 						}
 						break;
 					}
@@ -603,40 +606,38 @@ static void handle_edits_to_task(PomodoroData* data) {
 	while(true) {
 		switch (lastKeyPressed) {
 			case KEY_ESCAPE: {
-				snprintf(SelectedTask->desc.chars, STR_BUFFER_CAPACITY, "%s", str_buffer);
-				SelectedTask->desc.length = strlen(SelectedTask->desc.chars);
-
-				data->tasks.isEditing = false;
+				snprintf(SelectedString->chars, SelectedString->capacity, "%s", str_buffer);
+				SelectedString->length = strlen(SelectedString->chars);
+				data->tasks.isEditing = IS_NOT_EDITING;
 				task_id = -1;
 				break;
 			}
 
 			case KEY_BACKSPACE: {
-				if (SelectedTask->desc.length <= 0) {
-					break;
+				if (SelectedString && SelectedString->length > 0) {
+					SelectedString->chars[--SelectedString->length] = '\0';
 				}
-
-				Remove_Char_From_Task(SelectedTask);
 				break;
 			}
 
 			case KEY_ENTER: {
-				SelectedTask->desc.chars[SelectedTask->desc.length] = '\0';
-				data->tasks.isEditing = false;
+				SelectedString->chars[SelectedString->length] = '\0';
+				data->tasks.isEditing = IS_NOT_EDITING;
 
 				task_id = -1;
 				str_buffer_length = 0;
 				str_buffer[str_buffer_length] = '\0';
-				SelectedTask = NULL;
+				SelectedString = NULL;
 				break;
 			}
 
 			default: {
 				if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-					if (SelectedTask->desc.length >= (STR_BUFFER_CAPACITY - 1)) {
-						return;
+					if (SelectedString->length >= (SelectedString->capacity - 1)) {
+						break;
 					}
-					Add_Char_To_Task(SelectedTask, GetCharPressed());
+					SelectedString->chars[SelectedString->length++] = GetCharPressed();
+					SelectedString->chars[SelectedString->length] = '\0';
 				}
 				break;
 			}

@@ -22,9 +22,6 @@ Lets make it responsive i guess
 ## Scaling
 - https://acerx-amj.github.io/blogs/responsive_design.html
 
-
-> I haven't used neither of these in the past so I am having a little hard time grasping it.
-
 ## Temporary Notes on CLAY
 
 Clay Initilize

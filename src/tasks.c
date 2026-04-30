@@ -15,7 +15,7 @@ int Init_Tasks(Tasks* task_arr) {
 	task_arr->__capacity__ = capacity;
 	task_arr->tasks_count = 0;
 	task_arr->currentSelectedTask = -1;
-	task_arr->isEditing = true;
+	task_arr->isEditing = IS_NOT_EDITING;
 
 	// TODO:
 	task_arr->isDragging = false;
@@ -95,7 +95,7 @@ void Remove_Char_From_Task(Task* task) {
 }
 
 void Select_Task(Tasks *tasks, int index, bool rearrange) {
-	if (index == tasks->currentSelectedTask) tasks->currentSelectedTask = -1;
+	if (index == tasks->currentSelectedTask) return;
 	if (index > tasks->tasks_count || index < 0) return;
 
 	if (!rearrange) {
