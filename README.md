@@ -2,6 +2,10 @@
 
 - [ ] Minimal Viable Product for release in Flathub finally
 
+
+## Helper:
+- Thag from discord, CLAY
+
 # COOL
 - https://stackoverflow.com/a/5256426
 

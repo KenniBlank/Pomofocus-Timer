@@ -4,7 +4,7 @@
 	// - [ ] Add keys left-right edit option to task
 	// - [ ] New Task
 
-// - [ ] Add visual cue to selected task, tick for completed task, modify focus count on pomodoro counts
+// - [ ] Add visual cue completed task: through line
 // - [x] Statistics
 // - [ ] On complete sound for break and focus, different
 // - [ ] Save and Load System
@@ -13,7 +13,6 @@
 // - [ ] Optimize to use as little memory as possible
 // - [ ] Compile for release: .exe, .flatpak, .deb, nah not snap and so on, maybe use raylib's build template
 // - [ ] On error: notify about the error, maybe a small notification that goes away in 3 seconds inside app itself
-
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +21,7 @@
 #include <stdint.h>
 #include "cJSON.h"
 
+//  Icon this maybe
 #include "raylib.h"
 
 #define CLAY_IMPLEMENTATION
@@ -39,6 +39,8 @@
 	.length = str.length,\
 }
 
+#define onHover(color) (Clay_Color) {.r = color.r, .g = color.g, .b = color.b, .a = (color.a / 2.0f)}
+
 #define getWidthRatio(baseWidth) (GetScreenWidth() / ((baseWidth) * 1.0f))
 #define getHeightRatio(baseHeight) (GetScreenHeight() / ((baseHeight) * 1.0f))
 #define getCubicRatio(baseWidth, baseHeight) fmin(getWidthRatio(baseWidth), getHeightRatio(baseHeight))
@@ -52,6 +54,7 @@
 // GLOBAL variables
 bool g_reinit_clay;
 float g_UI_SCALE;
+bool g_task_index = true;
 
 #define BASE_FONT_SIZE 16
 enum {
@@ -84,6 +87,8 @@ enum {
 	COLOR_BACKGROUND_ACTIVE,
 
 	COLOR_TXT_DEFAULT,
+
+	COLOR_TASK_SELECTED,
 
 	COLOR_BUTTON_FSL_BACKGROUND, // FSB = Focus, Short break, Long break
 	COLOR_BUTTON_FSL_BACKGROUND_SELECTED, // FSB = Focus, Short break, Long break
@@ -150,8 +155,8 @@ typedef struct {
 	float REPEAT_INTERVAL; // How much time per repeat
 
 	float SCROLL_MULTIPLIER;
-	bool rearrangeTaskOnSelect; // Moves task to top
 
+	bool rearrangeTaskOnSelect; // Moves task to top
 	bool onTaskSwitchResetTimer;
 } Options;
 
@@ -215,11 +220,11 @@ int initialize_data(PomodoroData* data) {
 			.masterVolume = 0.2f,
 			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = 3,
 			.focusCount = 0,
-			.rearrangeTaskOnSelect = true,
 			.REPEAT_DELAY = 0.30f, // 300ms
 			.REPEAT_INTERVAL = 0.03f, // 30ms
 			.SCROLL_MULTIPLIER = 10.0f,
-			.onTaskSwitchResetTimer = true
+			.rearrangeTaskOnSelect = true,
+			.onTaskSwitchResetTimer = true,
 		},
 		.stats = {
 			.stats = NULL,
@@ -256,6 +261,7 @@ int initialize_data(PomodoroData* data) {
 	data->colors[COLOR_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 255, .g = 255, .b = 255, .a = 255};
 	data->colors[COLOR_BACKGROUND_ACTIVE] = (Clay_Color) {.r = 178, .g = 242, .b = 187, .a = 255};
 	data->colors[COLOR_TXT_DEFAULT] = (Clay_Color) {.r = 0, .g = 0, .b = 0, .a = 255};
+	data->colors[COLOR_TASK_SELECTED] = (Clay_Color) {.r = 200, .g = 100, .b = 100, .a = 255};
 	data->colors[COLOR_BUTTON_FSL_BACKGROUND] = (Clay_Color) {.r = 233, .g = 236, .b = 239, .a = 255};
 	data->colors[COLOR_BUTTON_FSL_BACKGROUND_SELECTED] = (Clay_Color) {.r = 255, .g = 255, .b = 255, .a = 255};
 	data->colors[COLOR_BUTTON_SS_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 255, .g = 249, .b = 219, .a = 255};
@@ -304,7 +310,6 @@ void clean_data(PomodoroData* data) {
 
 int main(void) {
 	InitAudioDevice();
-
 	PomodoroData pomo_data;
 	if (initialize_data(&pomo_data)) {
 		clean_data(&pomo_data);
@@ -317,7 +322,6 @@ int main(void) {
 	Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, malloc(totalMemorySize));
 	Clay_Initialize(clayMemory, (Clay_Dimensions) { (float)GetScreenWidth(), (float)GetScreenHeight() }, (Clay_ErrorHandler) { HandleClayErrors, 0 });
 
-	// TODO: SDF font rather than this
 	Font fonts[FONT_SIZE];
 	fonts[FONT_ID_DEFAULT] = GetFontDefault();
 
@@ -375,8 +379,29 @@ int main(void) {
 		str->length = strlen(str->chars);
 
 		BeginDrawing();
-			ClearBackground(BLACK);
-			Clay_Raylib_Render(ClayCreateLayout(&pomo_data), fonts);
+			ClearBackground(MAGENTA); // Remove, only for development this is
+			Clay_RenderCommandArray renderCommands = ClayCreateLayout(&pomo_data);
+			Clay_Raylib_Render(renderCommands, fonts);
+
+			float throughLineHeight = getFontHelper((&pomo_data), BORDER_WIDTH * 2);
+			throughLineHeight = (throughLineHeight > 1.0f) ? throughLineHeight: 1.0f;
+
+			for (int j = 0; j < renderCommands.length; j++) {
+				Clay_RenderCommand *renderCommand = Clay_RenderCommandArray_Get(&renderCommands, j);
+				if (renderCommand->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT && renderCommand->userData) {
+					if (renderCommand->boundingBox.y < Clay_GetElementData(Clay_GetElementId(CLAY_STRING("Tasks"))).boundingBox.y) continue;
+
+					Clay_BoundingBox boundingBox = {renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height};
+					Clay_TextRenderData *textData = &renderCommand->renderData.text;
+					DrawRectangleRec((Rectangle) {
+						.x = boundingBox.x,
+						.y = boundingBox.y  + (boundingBox.height - throughLineHeight) / 2.0f,
+						.width = boundingBox.width,
+						.height = throughLineHeight,
+
+					}, CLAY_COLOR_TO_RAYLIB_COLOR(textData->textColor));
+				}
+			}
 		EndDrawing();
 	}
 
@@ -399,7 +424,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 	CLAY(CLAY_SID(txt)) {
 		Clay_Color bg_color = colors_array[BG_COLOR];
 		if (Clay_Hovered()) {
-			bg_color.a -= 100.0f;
+			bg_color = onHover(bg_color);
 		}
 
 		CLAY_AUTO_ID({
@@ -442,7 +467,8 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 			.bottom = getFontHelper(data, BASE_FONT_SIZE),
 			.left = 0,
 			.right = 0
-		}
+		},
+		.childGap = getFontHelper(data, BUTTON_PADDING)
 	};
 
 	float borderWidth = getFontHelper(data, BORDER_WIDTH * 2);
@@ -475,6 +501,49 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 			CLAY_AUTO_ID({
 				.layout = {
 					.sizing = {
+						.width = CLAY_SIZING_FIXED(getFontHelper(data, BUTTON_PADDING)),
+						.height = CLAY_SIZING_FIXED(getFontHelper(data, HEADER5)),
+					},
+					.childAlignment = {
+						.x = CLAY_ALIGN_X_CENTER,
+						.y = CLAY_ALIGN_Y_TOP
+					},
+					.padding = epadding
+				},
+				.backgroundColor =  data->colors[COLOR_TASK_SELECTED],
+			});
+
+			CLAY_AUTO_ID({
+				.layout = {
+					.sizing = {
+						.width = CLAY_SIZING_FIXED(getFontHelper(data, HEADER5)),
+						.height = CLAY_SIZING_FIXED(getFontHelper(data, HEADER5)),
+					},
+					.padding = epadding
+				},
+				.backgroundColor = task->completed? // TODO: define better colors
+					Clay_Hovered()? onHover(RAYLIB_COLOR_TO_CLAY_COLOR(WHITE)): RAYLIB_COLOR_TO_CLAY_COLOR(RED):
+					Clay_Hovered()? onHover(RAYLIB_COLOR_TO_CLAY_COLOR(RED)): RAYLIB_COLOR_TO_CLAY_COLOR(WHITE),
+				.border = data->tasks.currentSelectedTask == taskIndex? eborder: _border,
+			}) {
+				if (Clay_Hovered()) {
+					if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+						task->completed = !task->completed;
+						Tasks *tasks = &data->tasks;
+
+						struct Task task_completed = *task;
+						for (int i = tasks->currentSelectedTask; i < tasks->tasks_count - 1; i++) {
+							tasks->tasks[i] = tasks->tasks[i + 1];
+						}
+						tasks->tasks[tasks->tasks_count - 1] = task_completed;
+						data->tasks.isEditing = IS_NOT_EDITING;
+					}
+				}
+			}
+
+			CLAY(CLAY_ID("Selected Task"), {
+				.layout = {
+					.sizing = {
 						.width = CLAY_SIZING_FIT(0),
 						.height = CLAY_SIZING_FIT(0)
 					},
@@ -498,7 +567,8 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 					.textColor = data->colors[TXT_COLOR],
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
-					.textAlignment = CLAY_TEXT_ALIGN_LEFT
+					.textAlignment = CLAY_TEXT_ALIGN_LEFT,
+					.userData = task->completed ? &g_task_index: NULL // Dummy userdata so who cares
 				});
 			}
 		} else {
@@ -520,12 +590,12 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 					.textColor = data->colors[TXT_COLOR],
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
-					.textAlignment = CLAY_TEXT_ALIGN_LEFT
+					.textAlignment = CLAY_TEXT_ALIGN_LEFT,
+					.userData = task->completed ? &g_task_index: NULL // Dummy userdata so who cares
 				});
 			}
 		}
 
-		CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_FIXED(getFontHelper(data, HEADER5))}}});
 		CLAY_AUTO_ID({
 			.layout = {
 				.sizing = {
@@ -534,7 +604,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				},
 				.childAlignment = {
 					.x = CLAY_ALIGN_X_RIGHT,
-					.y = CLAY_ALIGN_Y_CENTER
+					.y = CLAY_ALIGN_Y_TOP
 				}
 			}
 		}) {
