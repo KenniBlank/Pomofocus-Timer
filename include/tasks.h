@@ -25,6 +25,8 @@ struct Task {
 	int id;
 
 	bool completed;
+	bool descDefined;
+	bool count_expectedDefined;
 };
 
 typedef struct {

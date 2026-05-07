@@ -39,6 +39,7 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	if (newTask.desc.chars == NULL) return newTask;
 	snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
 	newTask.desc.length = strlen(newTask.desc.chars);
+	newTask.descDefined = newTask.desc.length > 0;
 
 	newTask.count_expected.capacity = STR_BUFFER_CAPACITY;
 	newTask.count_expected.chars = malloc(sizeof(char) * newTask.desc.capacity);
@@ -50,7 +51,7 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	}
 	snprintf(newTask.count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", count, expected);
 	newTask.count_expected.length = strlen(newTask.count_expected.chars);
-
+	newTask.count_expectedDefined = count != -1;
 	return newTask;
 };
 
@@ -118,6 +119,8 @@ int Add_Focus_Count_To_Task(Task *task) {
 	task->count++;
 	snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 	task->count_expected.length = strlen(task->count_expected.chars);
+
+	// TODO Maybe: if (task->count == task->expected) task->completed = true;
 	return 0;
 }
 
