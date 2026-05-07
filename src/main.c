@@ -238,12 +238,11 @@ int initialize_data(PomodoroData* data) {
 	};
 
 	// TODO: remove later cause this is just dummy
-	// NP here
-	// // Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 5", 5, 10), data->options.rearrangeTaskOnSelect);
-	// // Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 4", 4, 10), data->options.rearrangeTaskOnSelect);
-	// // Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 3", 3, 10), data->options.rearrangeTaskOnSelect);
+	// Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 5", 5, 10), data->options.rearrangeTaskOnSelect);
+	// Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 4", 4, 10), data->options.rearrangeTaskOnSelect);
+	// Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 3", 3, 10), data->options.rearrangeTaskOnSelect);
 	// Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 2", 2, 10), data->options.rearrangeTaskOnSelect);
-	Add_Task(&data->tasks, CreateNewTask("Hello", 1, 10), data->options.rearrangeTaskOnSelect);
+	// Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 1", 1, 10), data->options.rearrangeTaskOnSelect);
 	// Add_Task(&data->tasks, CreateNewTask("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.", 6, 10), data->options.rearrangeTaskOnSelect);
 
 	if (data->timerConstraints.timerStr.chars == NULL) return 1;
@@ -504,14 +503,14 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 		.a = data->colors[TXT_COLOR].a / 2.0f,
 	};
 
-	if (!task->descDefined && data->tasks.isEditing == IS_NOT_EDITING) {
-		snprintf(task->desc.chars, STR_BUFFER_CAPACITY, "%s", "Add Task Description");
+	if (!task->descDefined && (data->tasks.isEditing != IS_EDITING_TASK_DESC || data->tasks.currentSelectedTask != taskIndex)) {
+		snprintf(task->desc.chars, STR_BUFFER_CAPACITY, "%s", "Task Description");
 		task->desc.length = strlen(task->desc.chars);
 	}
 
-	if (!task->count_expectedDefined && data->tasks.isEditing == IS_NOT_EDITING) {
+	if (!task->count_expectedDefined && (data->tasks.isEditing != IS_EDITING_TASK_COUNT_EXPECTED || data->tasks.currentSelectedTask != taskIndex)) {
 		snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%s", "0 / 0");
-		task->desc.length = strlen(task->desc.chars);
+		task->count_expected.length = strlen(task->count_expected.chars);
 	}
 
 	Clay_String desc = STRING_TO_CLAY_STRING(task->desc);
@@ -657,7 +656,8 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 					.textColor = task->count_expectedDefined? data->colors[COLOR_TXT_DEFAULT]: text_ColorNotDefined,
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
-					.textAlignment = CLAY_TEXT_ALIGN_RIGHT
+					.textAlignment = CLAY_TEXT_ALIGN_RIGHT,
+					.userData = task->completed ? &g_task_index: NULL // Dummy userdata so who cares
 				});
 
 				if (Clay_Hovered() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -780,13 +780,15 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		case 1: {
 			struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected);
+				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) > 0) {
+					task->count_expectedDefined = true;
+				}
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 
-				task->count_expectedDefined = true;
+				task->count_expectedDefined = task->count > 0;
 			} else {
-				task->descDefined = true;
+				task->descDefined = task->desc.length > 0;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -813,9 +815,9 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 
-				task->count_expectedDefined = true;
+				task->count_expectedDefined = task->count > 0;
 			} else {
-				task->descDefined = true;
+				task->descDefined = task->desc.length > 0;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -878,12 +880,6 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 			fflush(stdout);
 		}
 	}
-
-	if (IsKeyDown(KEY_SPACE)) {
-		PRINT(data->tasks.tasks[data->tasks.currentSelectedTask].count_expectedDefined);
-		PRINT(data->tasks.tasks[data->tasks.currentSelectedTask].count_expectedDefined);
-	}
-
 	if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) {
 		data->tasks.isDragging = false;
 	}
@@ -1221,7 +1217,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 		}
 
 		if (data->appState % 2 != 0) {
-			Clay_String ADD_TASK = { .chars = "  + New Task  ", .isStaticallyAllocated = false};
+			Clay_String ADD_TASK = { .chars = " +Task ", .isStaticallyAllocated = false};
 			ADD_TASK.length = strlen(ADD_TASK.chars);
 
 			RenderButton(ADD_TASK, COLOR_BACKGROUND_ACTIVE, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
