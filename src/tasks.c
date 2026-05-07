@@ -51,7 +51,7 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	}
 	snprintf(newTask.count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", count, expected);
 	newTask.count_expected.length = strlen(newTask.count_expected.chars);
-	newTask.count_expectedDefined = count != -1;
+	newTask.count_expectedDefined = count != 0;
 	return newTask;
 };
 

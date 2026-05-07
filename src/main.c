@@ -2,10 +2,7 @@
 // - [~] Modifing Task Desc, Count, Expected
 	// - [ ] Add repeating keys option + CTRL + A to select all +
 	// - [ ] Add keys left-right edit option to task
-	// - [ ] New Task, gonna do that next!
 // - [ ] On timer going off, send notification, and a signal to system: so that it can trigger some action
-// - [x] Add visual cue completed task: through line
-// - [x] Statistics
 // - [ ] On complete sound for break and focus, different
 // - [ ] Save and Load System
 
@@ -513,7 +510,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 	}
 
 	if (!task->count_expectedDefined && data->tasks.isEditing == IS_NOT_EDITING) {
-		snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%s", "-1 / 0");
+		snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%s", "0 / 0");
 		task->desc.length = strlen(task->desc.chars);
 	}
 
@@ -781,14 +778,15 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		case 0: break;
 
 		case 1: {
+			struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 				sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected);
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
-				task->descDefined = true;
+
+				task->count_expectedDefined = true;
 			} else {
-				data->tasks.tasks[data->tasks.currentSelectedTask].count_expectedDefined = true;
+				task->descDefined = true;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -809,14 +807,15 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		}
 
 		case 3: {
+			struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 				sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected);
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
-				task->descDefined = true;
+
+				task->count_expectedDefined = true;
 			} else {
-				data->tasks.tasks[data->tasks.currentSelectedTask].count_expectedDefined = true;
+				task->descDefined = true;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -878,6 +877,11 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 			printf("Gui Scale: %.2f\n", g_UI_SCALE);
 			fflush(stdout);
 		}
+	}
+
+	if (IsKeyDown(KEY_SPACE)) {
+		PRINT(data->tasks.tasks[data->tasks.currentSelectedTask].count_expectedDefined);
+		PRINT(data->tasks.tasks[data->tasks.currentSelectedTask].count_expectedDefined);
 	}
 
 	if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) {
@@ -1217,13 +1221,13 @@ void Device_Smart_Phone(PomodoroData* data) {
 		}
 
 		if (data->appState % 2 != 0) {
-			Clay_String ADD_TASK = { .chars = "New Task", .isStaticallyAllocated = false};
+			Clay_String ADD_TASK = { .chars = "  + New Task  ", .isStaticallyAllocated = false};
 			ADD_TASK.length = strlen(ADD_TASK.chars);
 
-			RenderButton(ADD_TASK, COLOR_BACKGROUND_INACTIVE, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, HEADER5), getFontHelper(data, LETTER_SPACING));
+			RenderButton(ADD_TASK, COLOR_BACKGROUND_ACTIVE, COLOR_TXT_DEFAULT, COLOR_TXT_DEFAULT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 			bool flag = Clay_PointerOver(Clay_GetElementId(ADD_TASK));
 			if (flag && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-				Add_Task(&data->tasks, CreateNewTask("", -1, 0), true);
+				Add_Task(&data->tasks, CreateNewTask("", 0, 0), true); // I am guessing it's cause of this because it wants to render this
 				data->tasks.isEditing = IS_EDITING_TASK_DESC;
 			}
 
