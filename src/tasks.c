@@ -5,6 +5,8 @@
 #include "tasks.h"
 
 typedef struct Task Task;
+static int __ID__ = 0;
+
 // TODO: create Arena and preallocate memory for 16 tasks and description of it
 int Init_Tasks(Tasks* task_arr) {
 	int capacity = 16;
@@ -23,15 +25,12 @@ int Init_Tasks(Tasks* task_arr) {
 }
 
 Task CreateNewTask(const char *str_literal, int count, int expected) {
-	static int id = 0;
-
 	Task newTask = {
 		.count = count,
 		.expected = expected,
 		.__completed__ = false,
-		.id = id
+		.id = __ID__
 	};
-	id++;
 
 	// TODO: error handling
 	newTask.desc.capacity = STR_BUFFER_CAPACITY;
@@ -43,15 +42,18 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 
 	newTask.count_expected.capacity = STR_BUFFER_CAPACITY;
 	newTask.count_expected.chars = malloc(sizeof(char) * newTask.desc.capacity);
-	if (newTask.desc.chars == NULL) {
+	if (newTask.count_expected.chars == NULL) {
 		if (newTask.desc.chars) {
 			free(newTask.desc.chars);
+			newTask.desc.chars = NULL;
 		}
 		return newTask;
 	}
 	snprintf(newTask.count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", count, expected);
 	newTask.count_expected.length = strlen(newTask.count_expected.chars);
 	newTask.__countExpectedDefined__ = count != 0;
+
+	__ID__++;
 	return newTask;
 };
 
@@ -60,7 +62,8 @@ int Add_Task(Tasks* task_arr, struct Task newTask, bool rearrange) {
 	// Returns -1 on being unable to add task to tasks
 	// Returns 0 on success
 
-	if (newTask.desc.chars == NULL) return -2;
+	if (newTask.desc.chars == NULL || newTask.count_expected.chars == NULL) return -2;
+
 	if (task_arr->__capacity__ < (task_arr->tasks_count + 1)) {
 		int newCapacity = task_arr->__capacity__ * 2;
 
@@ -127,20 +130,30 @@ int Add_Focus_Count_To_Task(Task *task) {
 void Remove_Task(Tasks* task_arr, int index) {
 	if (index >= task_arr->tasks_count || index < 0) return;
 
+	Task task_to_remove = task_arr->tasks[index];
 	while (index < (task_arr->tasks_count - 1)) {
 		task_arr->tasks[index] = task_arr->tasks[index + 1];
 		++index;
 	}
+	task_arr->tasks[index] = task_to_remove;
 	--task_arr->tasks_count;
+	task_arr->currentSelectedTask = task_arr->tasks_count > 0? 0: -1;
 }
 
 void Clean_Tasks(Tasks *task_arr) {
 	if (task_arr->tasks) {
-		for (int i = 0; i < task_arr->tasks_count; i++) {
+		for (int i = 0; i < __ID__; i++) {
 			if (task_arr->tasks[i].desc.chars) {
 				free(task_arr->tasks[i].desc.chars);
+				task_arr->tasks[i].desc.chars = NULL;
+			}
+
+			if (task_arr->tasks[i].count_expected.chars) {
+				free(task_arr->tasks[i].count_expected.chars);
+				task_arr->tasks[i].count_expected.chars = NULL;
 			}
 		}
 		free(task_arr->tasks);
+		task_arr->tasks = NULL;
 	}
 }
