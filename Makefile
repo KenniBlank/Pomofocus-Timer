@@ -2,7 +2,7 @@
 SHELL=/bin/bash
 
 CC = clang
-CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address
+CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address -O0
 # CPPFLAGS += -Werror
 CFLAGS = -I./include
 LDFLAGS = -lGL -lm -lpthread -ldl -lrt -lX11 -lraylib -L./src/lib/

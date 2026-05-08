@@ -28,7 +28,7 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	Task newTask = {
 		.count = count,
 		.expected = expected,
-		.completed = false,
+		.__completed__ = false,
 		.id = id
 	};
 	id++;
@@ -39,7 +39,7 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	if (newTask.desc.chars == NULL) return newTask;
 	snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
 	newTask.desc.length = strlen(newTask.desc.chars);
-	newTask.descDefined = newTask.desc.length > 0;
+	newTask.__descDefined__ = newTask.desc.length > 0;
 
 	newTask.count_expected.capacity = STR_BUFFER_CAPACITY;
 	newTask.count_expected.chars = malloc(sizeof(char) * newTask.desc.capacity);
@@ -51,7 +51,7 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	}
 	snprintf(newTask.count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", count, expected);
 	newTask.count_expected.length = strlen(newTask.count_expected.chars);
-	newTask.count_expectedDefined = count != 0;
+	newTask.__countExpectedDefined__ = count != 0;
 	return newTask;
 };
 

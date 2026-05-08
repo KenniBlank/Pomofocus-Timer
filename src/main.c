@@ -1,10 +1,10 @@
 // TODOs:
+// - [ ] Save and Load System: Next!!
 // - [~] Modifing Task Desc, Count, Expected
 	// - [ ] Add repeating keys option + CTRL + A to select all +
 	// - [ ] Add keys left-right edit option to task
 // - [ ] On timer going off, send notification, and a signal to system: so that it can trigger some action
 // - [ ] On complete sound for break and focus, different
-// - [ ] Save and Load System
 
 #include <math.h>
 #include <stdio.h>
@@ -12,9 +12,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include "cJSON.h"
 
-//  Icon this maybe
+#include "cJSON.h" //
 #include "raylib.h"
 
 #define CLAY_IMPLEMENTATION
@@ -40,7 +39,7 @@
 #define getFontSize(baseWidth, baseHeight, fontSize) getCubicRatio(baseWidth, baseHeight) * (fontSize)
 #define getFontHelper(data, fontSize) FONT_SIZE(getFontSize(data->deviceDimensions.x, data->deviceDimensions.y, fontSize))
 
-#define APP_TITLE "PomoFocus Timer" // Pomo means tomato btw
+#define APP_TITLE "PomoFocus Timer"
 #define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout);
 #define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
 
@@ -143,16 +142,18 @@ typedef struct {
 } TimerConstraints;
 
 typedef struct {
+	// Sound Options
 	float masterVolume;
+
 	int focusCount;
-	int FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK; // Great name
+	int FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK;
 
 	float REPEAT_DELAY; // How much time to wait to activate repeat
 	float REPEAT_INTERVAL; // How much time per repeat
 
 	float SCROLL_MULTIPLIER;
 
-	bool rearrangeTaskOnSelect; // Moves task to top
+	bool selectedTaskOnTop; // Moves task to top
 	bool onTaskSwitchResetTimer;
 } Options;
 
@@ -169,6 +170,17 @@ typedef struct {
 	Tasks tasks;
 	SoundData sounds;
 } PomodoroData;
+
+static void LoadData(PomodoroData* data) {
+	// What to load:
+	// 1. Previous Tasks
+	// 2. Options
+	// 3. Stats, Maybe do this only when needed
+
+}
+
+static void SaveData(PomodoroData* data) {
+}
 
 static void HANDLE_EVENTS(uint32_t*, Clay_Arena*, PomodoroData* );
 static Clay_RenderCommandArray ClayCreateLayout(PomodoroData*);
@@ -219,7 +231,7 @@ int initialize_data(PomodoroData* data) {
 			.REPEAT_DELAY = 0.30f, // 300ms
 			.REPEAT_INTERVAL = 0.03f, // 30ms
 			.SCROLL_MULTIPLIER = 10.0f,
-			.rearrangeTaskOnSelect = true,
+			.selectedTaskOnTop = true,
 			.onTaskSwitchResetTimer = true,
 		},
 		.stats = {
@@ -236,6 +248,7 @@ int initialize_data(PomodoroData* data) {
 		.capacity = 16,
 		.length = 0
 	};
+	LoadData(data);
 
 	// TODO: remove later cause this is just dummy
 	// Add_Task(&data->tasks, CreateNewTask("Placeholder Task Description 5", 5, 10), data->options.rearrangeTaskOnSelect);
@@ -267,19 +280,14 @@ int initialize_data(PomodoroData* data) {
 	data->sounds.count = malloc(sizeof(float) * SOUND_COUNT);
 	if (data->sounds.count == NULL) return 1;
 	data->sounds.sounds[SOUND_CLICK] = LoadSound("resources/sounds/mouseClick.wav"); // TODO: load from wave instead for better control
-	if (IsSoundValid(data->sounds.sounds[SOUND_CLICK])) {
-		printf("Yes\n");
-	} else {
-		printf("No\n");
-		return 1;
-	}
-	fflush(stdout);
 	data->sounds.count[SOUND_CLICK] = 1;
 
 	return 0;
 }
 
 void clean_data(PomodoroData* data) {
+	SaveData(data);
+
 	Clean_Tasks(&data->tasks);
 
 	if (data->colors) {
@@ -345,7 +353,7 @@ int main(void) {
 	Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
 
 	SetTargetFPS(24);
-	SetExitKey(KEY_NULL);
+	// SetExitKey(KEY_NULL);
 
 	while (!WindowShouldClose()) {
 		HANDLE_EVENTS(&totalMemorySize, &clayMemory, &pomo_data);
@@ -503,12 +511,12 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 		.a = data->colors[TXT_COLOR].a / 2.0f,
 	};
 
-	if (!task->descDefined && (data->tasks.isEditing != IS_EDITING_TASK_DESC || data->tasks.currentSelectedTask != taskIndex)) {
+	if (!task->__descDefined__ && (data->tasks.isEditing != IS_EDITING_TASK_DESC || data->tasks.currentSelectedTask != taskIndex)) {
 		snprintf(task->desc.chars, STR_BUFFER_CAPACITY, "%s", "Task Description");
 		task->desc.length = strlen(task->desc.chars);
 	}
 
-	if (!task->count_expectedDefined && (data->tasks.isEditing != IS_EDITING_TASK_COUNT_EXPECTED || data->tasks.currentSelectedTask != taskIndex)) {
+	if (!task->__countExpectedDefined__ && (data->tasks.isEditing != IS_EDITING_TASK_COUNT_EXPECTED || data->tasks.currentSelectedTask != taskIndex)) {
 		snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%s", "0 / 0");
 		task->count_expected.length = strlen(task->count_expected.chars);
 	}
@@ -524,7 +532,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				if (data->options.onTaskSwitchResetTimer && !(data->tasks.currentSelectedTask == taskIndex)) {
 					data->timerConstraints.timer = data->timerConstraints.time_constants[data->appState >> 1];
 				}
-				Select_Task(&data->tasks, taskIndex, data->options.rearrangeTaskOnSelect);
+				Select_Task(&data->tasks, taskIndex, data->options.selectedTaskOnTop);
 				Clay_UpdateScrollContainers(true, (Clay_Vector2) { .x = 0.0f, .y = 0.0f }, GetFrameTime());
 			}
 		}
@@ -545,7 +553,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				.backgroundColor =  data->colors[COLOR_TASK_SELECTED],
 			});
 
-			if (task->descDefined) {
+			if (task->__descDefined__) {
 				CLAY_AUTO_ID({
 					.layout = {
 						.sizing = {
@@ -554,15 +562,15 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 						},
 						.padding = epadding
 					},
-					.backgroundColor = task->completed? // TODO: define better colors
+					.backgroundColor = task->__completed__? // TODO: define better colors
 						Clay_Hovered()? onHover(RAYLIB_COLOR_TO_CLAY_COLOR(WHITE)): RAYLIB_COLOR_TO_CLAY_COLOR(RED):
 						Clay_Hovered()? onHover(RAYLIB_COLOR_TO_CLAY_COLOR(RED)): RAYLIB_COLOR_TO_CLAY_COLOR(WHITE),
 					.border = data->tasks.currentSelectedTask == taskIndex? eborder: _border,
 				}) {
 					if (Clay_Hovered() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 						Tasks *tasks = &data->tasks;
-						task->completed = !task->completed;
-						if (task->completed) {
+						task->__completed__ = !task->__completed__;
+						if (task->__completed__) {
 							struct Task tsk = *task;
 							for (int i = tasks->currentSelectedTask; i < tasks->tasks_count - 1; i++) {
 								tasks->tasks[i] = tasks->tasks[i + 1];
@@ -570,7 +578,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 							tasks->tasks[tasks->tasks_count - 1] = tsk;
 							data->tasks.isEditing = IS_NOT_EDITING;
 						}
-						if (tasks->tasks[tasks->currentSelectedTask].completed) {
+						if (tasks->tasks[tasks->currentSelectedTask].__completed__) {
 							tasks->currentSelectedTask = -1;
 						}
 					}
@@ -592,11 +600,11 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				CLAY_TEXT(desc, {
 					.fontSize = font_size,
 					.fontId = FONT_ID,
-					.textColor = task->descDefined? data->colors[COLOR_TXT_DEFAULT]: text_ColorNotDefined,
+					.textColor = task->__descDefined__? data->colors[COLOR_TXT_DEFAULT]: text_ColorNotDefined,
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
 					.textAlignment = CLAY_TEXT_ALIGN_LEFT,
-					.userData = task->completed ? &g_task_index: NULL // Dummy userdata so who cares
+					.userData = task->__completed__ ? &g_task_index: NULL // Dummy userdata so who cares
 				});
 				if (Clay_Hovered() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 					data->tasks.isEditing = IS_EDITING_TASK_DESC;
@@ -618,11 +626,11 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				CLAY_TEXT(desc, {
 					.fontSize = font_size,
 					.fontId = FONT_ID,
-					.textColor = task->descDefined? data->colors[COLOR_TXT_DEFAULT]: text_ColorNotDefined,
+					.textColor = task->__descDefined__? data->colors[COLOR_TXT_DEFAULT]: text_ColorNotDefined,
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
 					.textAlignment = CLAY_TEXT_ALIGN_LEFT,
-					.userData = task->completed ? &g_task_index: NULL // Dummy userdata so who cares
+					.userData = task->__completed__ ? &g_task_index: NULL // Dummy userdata so who cares
 				});
 			}
 		}
@@ -653,11 +661,11 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 				CLAY_TEXT(count_expected, {
 					.fontSize = font_size,
 					.fontId = FONT_ID,
-					.textColor = task->count_expectedDefined? data->colors[COLOR_TXT_DEFAULT]: text_ColorNotDefined,
+					.textColor = task->__countExpectedDefined__? data->colors[COLOR_TXT_DEFAULT]: text_ColorNotDefined,
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
 					.textAlignment = CLAY_TEXT_ALIGN_RIGHT,
-					.userData = task->completed ? &g_task_index: NULL // Dummy userdata so who cares
+					.userData = task->__completed__ ? &g_task_index: NULL // Dummy userdata so who cares
 				});
 
 				if (Clay_Hovered() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -763,8 +771,8 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		SelectedString = EDITING_STATE == IS_EDITING_TASK_DESC? &data->tasks.tasks[data->tasks.currentSelectedTask].desc: &data->tasks.tasks[data->tasks.currentSelectedTask].count_expected;
 
 		if (
-			(data->tasks.tasks[data->tasks.currentSelectedTask].descDefined && EDITING_STATE == IS_EDITING_TASK_DESC) ||
-			(data->tasks.tasks[data->tasks.currentSelectedTask].count_expectedDefined && EDITING_STATE == IS_EDITING_TASK_COUNT_EXPECTED)
+			(data->tasks.tasks[data->tasks.currentSelectedTask].__descDefined__ && EDITING_STATE == IS_EDITING_TASK_DESC) ||
+			(data->tasks.tasks[data->tasks.currentSelectedTask].__countExpectedDefined__ && EDITING_STATE == IS_EDITING_TASK_COUNT_EXPECTED)
 		) {
 			snprintf(str_buffer, STR_BUFFER_CAPACITY, "%s", SelectedString->chars);
 			str_buffer_length = strlen(str_buffer);
@@ -781,14 +789,14 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 			struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
 				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) > 0) {
-					task->count_expectedDefined = true;
+					task->__countExpectedDefined__ = true;
 				}
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 
-				task->count_expectedDefined = task->count > 0;
+				task->__countExpectedDefined__ = task->count > 0;
 			} else {
-				task->descDefined = task->desc.length > 0;
+				task->__descDefined__ = task->desc.length > 0;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -815,9 +823,9 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 
-				task->count_expectedDefined = task->count > 0;
+				task->__countExpectedDefined__ = task->count > 0;
 			} else {
-				task->descDefined = task->desc.length > 0;
+				task->__descDefined__ = task->desc.length > 0;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -855,6 +863,7 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 		data->device = DEVICE_WATCH;
 	}
 
+	// Key presses
 	HANDLE_EDITS_TO_TASK(data);
 
 	if (data->tasks.isEditing == IS_NOT_EDITING) {
@@ -876,8 +885,7 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 				g_UI_SCALE = 0.8f;
 			}
 
-			printf("Gui Scale: %.2f\n", g_UI_SCALE);
-			fflush(stdout);
+			PRINT(g_UI_SCALE);
 		}
 	}
 	if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) {
@@ -1122,7 +1130,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 			.backgroundColor = data->appState % 2 == 0? data->colors[COLOR_BACKGROUND_ACTIVE]: data->colors[COLOR_BACKGROUND_INACTIVE]
 		}){
 			if (data->appState % 2 == 0) {
-				if (tasks.currentSelectedTask >= 0 && tasks.currentSelectedTask < tasks.tasks_count && data->appState == STATE_FOCUS && data->tasks.tasks[data->tasks.currentSelectedTask].descDefined) {
+				if (tasks.currentSelectedTask >= 0 && tasks.currentSelectedTask < tasks.tasks_count && data->appState == STATE_FOCUS && data->tasks.tasks[data->tasks.currentSelectedTask].__descDefined__) {
 					CLAY_AUTO_ID({
 						.clip = {
 							.vertical = true,
@@ -1225,6 +1233,10 @@ void Device_Smart_Phone(PomodoroData* data) {
 			if (flag && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 				Add_Task(&data->tasks, CreateNewTask("", 0, 0), true); // I am guessing it's cause of this because it wants to render this
 				data->tasks.isEditing = IS_EDITING_TASK_DESC;
+
+				if (data->options.onTaskSwitchResetTimer) {
+					data->timerConstraints.timer = data->timerConstraints.time_constants[data->appState >> 1];
+				}
 			}
 
 			CLAY(CLAY_ID("Tasks"), {

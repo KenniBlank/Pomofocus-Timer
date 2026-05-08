@@ -3,16 +3,16 @@
 
 #define STR_BUFFER_CAPACITY 256
 
-enum EDITING_STATUS {
-	IS_NOT_EDITING = 0,
-	IS_EDITING_TASK_DESC,
-	IS_EDITING_TASK_COUNT_EXPECTED
-};
-
 struct String {
 	int length;
 	int capacity;
 	char *chars;
+};
+
+enum EDITING_STATUS {
+	IS_NOT_EDITING = 0,
+	IS_EDITING_TASK_DESC,
+	IS_EDITING_TASK_COUNT_EXPECTED
 };
 
 struct Task {
@@ -24,19 +24,19 @@ struct Task {
 
 	int id;
 
-	bool completed;
-	bool descDefined;
-	bool count_expectedDefined;
+	bool __completed__;
+	bool __descDefined__;
+	bool __countExpectedDefined__;
 };
 
 typedef struct {
 	struct Task* tasks;
+	int currentSelectedTask;
+
 	int __capacity__;
 	int tasks_count;
 
-	int currentSelectedTask;
 	enum EDITING_STATUS isEditing;
-
 	bool isDragging;
 } Tasks;
 
