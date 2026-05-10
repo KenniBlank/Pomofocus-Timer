@@ -2,7 +2,6 @@
 
 - [ ] Minimal Viable Product for release in Flathub finally
 
-
 ## Helper:
 - Thag from discord, CLAY
 

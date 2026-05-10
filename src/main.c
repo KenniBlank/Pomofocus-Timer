@@ -1,5 +1,5 @@
 // TODOs:
-// - [ ] Save and Load System: Next!!
+// - [~] Save and Load System: Next!!
 // - [~] Modifing Task Desc, Count, Expected
 	// - [ ] Add repeating keys option + CTRL + A to select all +
 	// - [ ] Add keys left-right edit option to task
@@ -98,6 +98,7 @@ enum {
 	COLOR_BACKGROUND_SS_BUTTON_SELECTED,
 
 	COLOR_TXT, // All txt colors should be of same, Limitation I impose!
+	COLOR_BORDER,
 	COLOR_SIZE
 };
 
@@ -227,7 +228,6 @@ static int LoadData(PomodoroData* data) {
 
 		if (__descDefined__) {
 			char *desc = cJSON_GetObjectItem(task, "desc")->valuestring;
-			PRINT_S(desc);
 			Add_Task(&data->tasks, CreateNewTask(desc, count, expected), data->options.selectedTaskOnTop);
 		} else {
 			Add_Task(&data->tasks, CreateNewTask("", count, expected), data->options.selectedTaskOnTop);
@@ -421,11 +421,12 @@ int initialize_data(PomodoroData* data) {
 	data->options.time_constants[LONG_BREAK_TIMER] = 15 * 60;
 	data->options.time_constants[SHORT_BREAK_TIMER] = 5 * 60;
 	data->timerConstraints.timer = data->options.time_constants[data->appState];
+
 	LoadData(data);
 
 	data->colors = malloc(sizeof(Clay_Color) * COLOR_SIZE);
 	if (data->colors == NULL) return 1;
-	data->colors[COLOR_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 255, .g = 255, .b = 255, .a = 255};
+	data->colors[COLOR_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 252, .g = 252, .b = 252, .a = 255};
 	data->colors[COLOR_BACKGROUND_ACTIVE] = (Clay_Color) {.r = 178, .g = 242, .b = 187, .a = 255};
 	data->colors[COLOR_BACKGROUND_MAIN_INACTIVE] = data->colors[COLOR_BACKGROUND_INACTIVE];
 	data->colors[COLOR_BACKGROUND_MAIN_ACTIVE] = data->colors[COLOR_BACKGROUND_ACTIVE];
@@ -434,10 +435,11 @@ int initialize_data(PomodoroData* data) {
 	data->colors[COLOR_BACKGROUND_SELECTED_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
 	data->colors[COLOR_BACKGROUND_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
 	data->colors[COLOR_BACKGROUND_FSL_BUTTON] = (Clay_Color) {.r = 240, .g = 240, .b = 240, .a = 255};
-	data->colors[COLOR_BACKGROUND_FSL_BUTTON_SELECTED] = (Clay_Color) {.r = 255, .g = 255, .b = 255, .a = 255};
+	data->colors[COLOR_BACKGROUND_FSL_BUTTON_SELECTED] = data->colors[COLOR_BACKGROUND_INACTIVE];
 	data->colors[COLOR_BACKGROUND_SS_BUTTON] = (Clay_Color) {.r = 255, .g = 249, .b = 219, .a = 255};
 	data->colors[COLOR_BACKGROUND_SS_BUTTON_SELECTED] = (Clay_Color) {.r = 250, .g = 82, .b = 82, .a = 255};
 	data->colors[COLOR_TXT] = (Clay_Color) {.r = 0, .g = 0, .b = 0, .a = 255};
+	data->colors[COLOR_BORDER] = data->colors[COLOR_TXT];
 
 	data->sounds.sounds = malloc(sizeof(Sound) * SOUND_COUNT);
 	if (data->sounds.sounds == NULL) return 1;
@@ -581,7 +583,7 @@ int main(void) {
 	return 0;
 }
 
-void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR, Clay_Color* colors_array, int FONT_ID, int font_size, int letter_spacing) {
+void RenderButton(Clay_String txt, int BG_COLOR, Clay_Color* colors_array, int FONT_ID, int font_size, int letter_spacing) {
 	float border_width = FONT_SIZE(BORDER_WIDTH);
 	border_width = border_width > 1.0f ? border_width: 1.0f;
 
@@ -598,7 +600,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 		CLAY_AUTO_ID({
 			.backgroundColor = bg_color,
 			.border = {
-				.color = colors_array[BORDER_COLOR],
+				.color = colors_array[COLOR_BORDER],
 				.width = CLAY_BORDER_OUTSIDE(border_width)
 			},
 			.layout = {
@@ -614,7 +616,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 				.fontId = FONT_ID,
 				.letterSpacing = letter_spacing,
 				.fontSize = (BG_COLOR != COLOR_BACKGROUND_FSL_BUTTON_SELECTED && flag) ? font_size * 1.04f: font_size,
-				.textColor = colors_array[TXT_COLOR],
+				.textColor = colors_array[COLOR_TXT],
 				.wrapMode = CLAY_TEXT_WRAP_NONE,
 				.textAlignment = CLAY_TEXT_ALIGN_CENTER
 			}));
@@ -622,7 +624,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, int TXT_COLOR, int BORDER_COLOR
 	}
 }
 
-void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLOR, int FONT_ID, int font_size, int letter_spacing) {
+void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID, int font_size, int letter_spacing) {
 	struct Task *task = &data->tasks.tasks[taskIndex];
 	Clay_LayoutConfig layout = {
 		.layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -643,7 +645,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 	borderWidth = (borderWidth > 1.0f) ? borderWidth: 1.0f;
 
 	Clay_BorderElementConfig eborder = {
-		.color = data->colors[TXT_COLOR],
+		.color = data->colors[COLOR_BORDER],
 		.width = CLAY_BORDER_OUTSIDE(borderWidth)
 	};
 	Clay_CornerRadius ecornerRadius = CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_WIDTH * 4));
@@ -653,10 +655,10 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int TXT_COLO
 	Clay_Padding _padding = {};
 
 	Clay_Color text_ColorNotDefined = (Clay_Color) {
-		.r = data->colors[TXT_COLOR].r,
-		.g = data->colors[TXT_COLOR].g,
-		.b = data->colors[TXT_COLOR].b,
-		.a = data->colors[TXT_COLOR].a / 2.0f,
+		.r = data->colors[COLOR_TXT].r,
+		.g = data->colors[COLOR_TXT].g,
+		.b = data->colors[COLOR_TXT].b,
+		.a = data->colors[COLOR_TXT].a / 2.0f,
 	};
 
 	if (!task->__descDefined__ && (data->tasks.isEditing != IS_EDITING_TASK_DESC || data->tasks.currentSelectedTask != taskIndex)) {
@@ -1115,7 +1117,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 			},
 		}) {
 			if (data->appState % 2 == 1) {
-				RenderButton(Focus_ShortBreak_LongBreak, COLOR_BACKGROUND_FSL_BUTTON, COLOR_TXT, COLOR_TXT, data->colors, FONT_ID_12_PX, FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
+				RenderButton(Focus_ShortBreak_LongBreak, COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_12_PX, FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
 				// TODO: add settings
 			}
 
@@ -1165,7 +1167,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 				}
 
 				CLAY_AUTO_ID({ .layout = { .sizing = { .height = CLAY_SIZING_PERCENT(0.1f) }}}) {}
-				RenderButton(str_Start_STOP, data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON, COLOR_TXT, COLOR_TXT, data->colors, data->appState % 2 == 0? FONT_ID_12_PX: FONT_ID_16_PX, data->appState % 2 == 0? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
+				RenderButton(str_Start_STOP, data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON, data->colors, data->appState % 2 == 0? FONT_ID_12_PX: FONT_ID_16_PX, data->appState % 2 == 0? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
 			}
 		}
 	}
@@ -1245,7 +1247,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 					.width = {
 						.bottom = borderWidth
 					},
-					.color = data->colors[COLOR_TXT]
+					.color = data->colors[COLOR_BORDER]
 				},
 			}){
 				CLAY_TEXT(app_title, {
@@ -1280,7 +1282,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 			},
 			.border = {
 				.width = CLAY_BORDER_OUTSIDE(borderWidth),
-				.color = data->colors[COLOR_TXT]
+				.color = data->colors[COLOR_BORDER]
 			},
 			.cornerRadius = CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_WIDTH * 4)),
 			.backgroundColor = data->appState % 2 == 0? data->colors[COLOR_BACKGROUND_MAIN_ACTIVE]: data->colors[COLOR_BACKGROUND_MAIN_INACTIVE]
@@ -1297,9 +1299,9 @@ void Device_Smart_Phone(PomodoroData* data) {
 							.layoutDirection = CLAY_TOP_TO_BOTTOM,
 							.childGap = getFontHelper(data, PARAGRAPH)
 						},
-						.border = { .width = { .bottom =  borderWidth }, .color = data->colors[COLOR_TXT] },
+						.border = { .width = { .bottom =  borderWidth }, .color = data->colors[COLOR_BORDER] },
 					}) {
-						RenderTask(data, tasks.currentSelectedTask, WIDTH, COLOR_TXT, FONT_ID_16_PX, getFontHelper(data, HEADER3), getFontHelper(data, LETTER_SPACING));
+						RenderTask(data, tasks.currentSelectedTask, WIDTH, FONT_ID_16_PX, getFontHelper(data, HEADER3), getFontHelper(data, LETTER_SPACING));
 					}
 				}
 			} else {
@@ -1315,13 +1317,13 @@ void Device_Smart_Phone(PomodoroData* data) {
 					},
 					.border = {
 						.width = CLAY_BORDER_OUTSIDE(borderWidth),
-						.color = data->colors[COLOR_TXT]
+						.color = data->colors[COLOR_BORDER]
 					},
 					.cornerRadius = CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_RADIUS * 2))
 				}){
-					RenderButton(str_Focus, data->appState == STATE_FOCUS_PAUSED? COLOR_BACKGROUND_FSL_BUTTON_SELECTED: COLOR_BACKGROUND_FSL_BUTTON, COLOR_TXT, COLOR_TXT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
-					RenderButton(str_Short_Break, data->appState == STATE_SHORT_BREAK_PAUSED? COLOR_BACKGROUND_FSL_BUTTON_SELECTED: COLOR_BACKGROUND_FSL_BUTTON, COLOR_TXT, COLOR_TXT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
-					RenderButton(str_Long_Break, data->appState == STATE_LONG_BREAK_PAUSED? COLOR_BACKGROUND_FSL_BUTTON_SELECTED: COLOR_BACKGROUND_FSL_BUTTON, COLOR_TXT, COLOR_TXT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderButton(str_Focus, data->appState == STATE_FOCUS_PAUSED? COLOR_BACKGROUND_FSL_BUTTON_SELECTED: COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderButton(str_Short_Break, data->appState == STATE_SHORT_BREAK_PAUSED? COLOR_BACKGROUND_FSL_BUTTON_SELECTED: COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderButton(str_Long_Break, data->appState == STATE_LONG_BREAK_PAUSED? COLOR_BACKGROUND_FSL_BUTTON_SELECTED: COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 				}
 			}
 
@@ -1361,8 +1363,6 @@ void Device_Smart_Phone(PomodoroData* data) {
 				RenderButton(
 					str_Start_STOP,
 					data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON,
-					COLOR_TXT,
-					COLOR_TXT,
 					data->colors,
 					data->appState % 2 == 0? FONT_ID_16_PX: FONT_ID_24_PX,
 					fontSize,
@@ -1380,7 +1380,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 			}) {
 				Clay_String ADD_TASK = { .chars = " +Task ", .isStaticallyAllocated = false};
 				ADD_TASK.length = strlen(ADD_TASK.chars);
-				RenderButton(ADD_TASK, COLOR_BACKGROUND_ACTIVE, COLOR_TXT, COLOR_TXT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+				RenderButton(ADD_TASK, COLOR_BACKGROUND_ACTIVE, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 				if (Clay_PointerOver(Clay_GetElementId(ADD_TASK)) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 					Add_Task(&data->tasks, CreateNewTask("", 0, 0), data->options.selectedTaskOnTop);
 					data->tasks.isEditing = IS_EDITING_TASK_DESC;
@@ -1392,7 +1392,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 					Clay_String REMOVE_TASK = { .chars = " x ", .isStaticallyAllocated = false};
 					REMOVE_TASK.length = strlen(REMOVE_TASK.chars);
 
-					RenderButton(REMOVE_TASK, COLOR_BACKGROUND_SS_BUTTON_SELECTED, COLOR_BACKGROUND_INACTIVE, COLOR_TXT, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderButton(REMOVE_TASK, COLOR_BACKGROUND_SS_BUTTON_SELECTED, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 					if (Clay_PointerOver(Clay_GetElementId(REMOVE_TASK)) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 						Remove_Task(&data->tasks, data->tasks.currentSelectedTask);
 					}
@@ -1424,13 +1424,13 @@ void Device_Smart_Phone(PomodoroData* data) {
 					.width = {
 						.betweenChildren = borderWidth
 					},
-					.color = data->colors[COLOR_TXT]
+					.color = data->colors[COLOR_BORDER]
 				},
 				.backgroundColor = data->colors[COLOR_BACKGROUND_TASKS]
 			}){
 				for (int i = 0; i < tasks.tasks_count; ++i) {
 					// if (tasks.isDragging) continue;
-					RenderTask(data, i, WIDTH, COLOR_TXT, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+					RenderTask(data, i, WIDTH, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 				}
 				// TODO: render dragging element and if it's border and another task's border cross more than 50% put it up of that task
 			}

@@ -40,6 +40,6 @@
 		"time_constants":	[1500, 300, 900]
 	},
 	"timerConstraints":	{
-		"timer":	891.3291015625
+		"timer":	900
 	}
 }
