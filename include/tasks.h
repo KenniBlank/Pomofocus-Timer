@@ -19,10 +19,10 @@ struct Task {
 	struct String desc;
 	struct String count_expected;
 
+	int id;
+
 	int count;
 	int expected;
-
-	int id;
 
 	bool __completed__;
 	bool __descDefined__;
