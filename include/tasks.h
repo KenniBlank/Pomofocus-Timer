@@ -5,8 +5,7 @@
 
 struct String {
 	int length;
-	int capacity;
-	char *chars;
+	char chars[STR_BUFFER_CAPACITY];
 };
 
 enum EDITING_STATUS {
@@ -43,6 +42,9 @@ typedef struct {
 int Init_Tasks(Tasks*);
 struct Task CreateNewTask(const char *, int count, int expected);
 int Add_Task(Tasks*, struct Task, bool rearrange);
+
+void Remove_Char_From_String(struct String* str);
+void Add_Char_To_String(struct String* str, char ch);
 
 // Maybe macro:
 int Add_Focus_Count_To_Task(struct Task *task);

@@ -97,7 +97,7 @@ enum {
 	COLOR_BACKGROUND_SS_BUTTON,
 	COLOR_BACKGROUND_SS_BUTTON_SELECTED,
 
-	COLOR_TXT, // All txt colors should be of same, Limitation I impose!
+	COLOR_TXT,
 	COLOR_BORDER,
 	COLOR_SIZE
 };
@@ -389,7 +389,6 @@ int initialize_data(PomodoroData* data) {
 		.colors = NULL,
 		.sounds.sounds = NULL,
 		.sounds.count = NULL,
-		.timerConstraints.timerStr.chars = NULL,
 		.tasks = NULL,
 		.options = {
 			.masterVolume = 0.2f,
@@ -411,11 +410,8 @@ int initialize_data(PomodoroData* data) {
 
 	Init_Tasks(&data->tasks);
 	data->timerConstraints.timerStr = (struct String) {
-		.chars = malloc(sizeof(char) * 16),
-		.capacity = 16,
 		.length = 0
 	};
-	if (data->timerConstraints.timerStr.chars == NULL) return 1;
 
 	data->options.time_constants[FOCUS_TIMER] = 25 * 60;
 	data->options.time_constants[LONG_BREAK_TIMER] = 15 * 60;
@@ -470,10 +466,6 @@ void clean_data(PomodoroData* data) {
 	if (data->sounds.count) {
 		free(data->sounds.count);
 		data->sounds.count = NULL;
-	}
-	if (data->timerConstraints.timerStr.chars) {
-		free(data->timerConstraints.timerStr.chars);
-		data->timerConstraints.timerStr.chars = NULL;
 	}
 }
 
@@ -544,7 +536,7 @@ int main(void) {
 		}
 		float *timer = &pomo_data.timerConstraints.timer;
 		struct String *str = &pomo_data.timerConstraints.timerStr;
-		snprintf(str->chars, str->capacity, "%02d:%02d", (int)*timer / 60, (int)*timer % 60);
+		snprintf(str->chars, STR_BUFFER_CAPACITY, "%02d:%02d", (int)*timer / 60, (int)*timer % 60);
 		str->length = strlen(str->chars);
 
 		BeginDrawing();
@@ -844,19 +836,13 @@ static int handle_String_edits(struct String *selectedString, Options* options) 
 			if (keyTimer >= (options->REPEAT_DELAY + options->REPEAT_INTERVAL)) {
 				switch (lastKeyPressed) {
 					case KEY_BACKSPACE: {
-						if (selectedString->length > 0) {
-							selectedString->chars[--selectedString->length] = '\0';
-						}
+						Remove_Char_From_String(selectedString);
 						break;
 					}
 
 					default: {
 						if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-							if (selectedString->length>= (selectedString->capacity - 1)) {
-								break;
-							}
-							selectedString->chars[selectedString->length++] = GetCharPressed();
-							selectedString->chars[selectedString->length] = '\0';
+							Add_Char_To_String(selectedString, GetCharPressed());
 						}
 						break;
 					}
@@ -876,19 +862,13 @@ static int handle_String_edits(struct String *selectedString, Options* options) 
 			case KEY_TAB: return 3;
 
 			case KEY_BACKSPACE: {
-				if (selectedString->length > 0) {
-					selectedString->chars[--selectedString->length] = '\0';
-				}
+				Remove_Char_From_String(selectedString);
 				break;
 			}
 
 			default: {
 				if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-					if (selectedString->length>= (selectedString->capacity - 1)) {
-						break;
-					}
-					selectedString->chars[selectedString->length++] = GetCharPressed();
-					selectedString->chars[selectedString->length] = '\0';
+					Add_Char_To_String(selectedString, GetCharPressed());
 				}
 				break;
 			}
@@ -924,9 +904,6 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 			snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 			task->count_expected.length = strlen(task->count_expected.chars);
 			SelectedString->chars[SelectedString->length] = '\0';
-
-			task->__descDefined__ = task->desc.length > 0;
-			task->__countExpectedDefined__ = task->count > 0;
 		}
 
 		str_buffer_length = 0;
@@ -959,10 +936,6 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 				}
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
-
-				task->__countExpectedDefined__ = task->count > 0;
-			} else {
-				task->__descDefined__ = task->desc.length > 0;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -973,7 +946,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		}
 
 		case -1: case 2: {
-			snprintf(SelectedString->chars, SelectedString->capacity, "%s", str_buffer);
+			snprintf(SelectedString->chars, STR_BUFFER_CAPACITY, "%s", str_buffer);
 			SelectedString->length = strlen(SelectedString->chars);
 			data->tasks.isEditing = IS_NOT_EDITING;
 			task_id = -1;
@@ -987,10 +960,6 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 				sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected);
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
-
-				task->__countExpectedDefined__ = task->count > 0;
-			} else {
-				task->__descDefined__ = task->desc.length > 0;
 			}
 			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
@@ -1000,6 +969,9 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 			break;
 		}
 	}
+
+	task->__countExpectedDefined__ = task->count > 0;
+	task->__descDefined__ = task->desc.length > 0;
 }
 
 static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, PomodoroData* data) {

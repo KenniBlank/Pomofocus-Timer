@@ -33,22 +33,10 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 	};
 
 	// TODO: error handling
-	newTask.desc.capacity = STR_BUFFER_CAPACITY;
-	newTask.desc.chars = malloc(sizeof(char) * newTask.desc.capacity);
-	if (newTask.desc.chars == NULL) return newTask;
 	snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
 	newTask.desc.length = strlen(newTask.desc.chars);
 	newTask.__descDefined__ = newTask.desc.length > 0;
 
-	newTask.count_expected.capacity = STR_BUFFER_CAPACITY;
-	newTask.count_expected.chars = malloc(sizeof(char) * newTask.desc.capacity);
-	if (newTask.count_expected.chars == NULL) {
-		if (newTask.desc.chars) {
-			free(newTask.desc.chars);
-			newTask.desc.chars = NULL;
-		}
-		return newTask;
-	}
 	snprintf(newTask.count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", count, expected);
 	newTask.count_expected.length = strlen(newTask.count_expected.chars);
 	newTask.__countExpectedDefined__ = count != 0;
@@ -62,12 +50,10 @@ int Add_Task(Tasks* task_arr, struct Task newTask, bool rearrange) {
 	// Returns -1 on being unable to add task to tasks
 	// Returns 0 on success
 
-	if (newTask.desc.chars == NULL || newTask.count_expected.chars == NULL) return -2;
-
 	if (task_arr->__capacity__ < (task_arr->tasks_count + 1)) {
 		int newCapacity = task_arr->__capacity__ * 2;
 
-		Task *tasks = (Task*) realloc(task_arr->tasks, sizeof(Task) * task_arr->__capacity__);
+		Task *tasks = (Task*) realloc(task_arr->tasks, sizeof(Task) * newCapacity);
 		if (tasks == NULL) {
 			return -1;
 		}
@@ -77,30 +63,29 @@ int Add_Task(Tasks* task_arr, struct Task newTask, bool rearrange) {
 	}
 
 	task_arr->tasks[task_arr->tasks_count] = newTask;
-
-	Select_Task(task_arr, task_arr->tasks_count, rearrange);
-
 	task_arr->tasks_count++;
+
+	Select_Task(task_arr, task_arr->tasks_count - 1, rearrange);
 	return 0;
 }
 
-void Add_Char_To_Task(Task* task, char ch) {
-	if (task && task->desc.length < (task->desc.capacity - 2)) {
-		task->desc.chars[task->desc.length] = ch;
-		task->desc.length++;
-		task->desc.chars[task->desc.length] = '\0';
+void Add_Char_To_String(struct String* str, char ch) {
+	if (str && str->length < (STR_BUFFER_CAPACITY - 2)) {
+		str->chars[str->length] = ch;
+		str->length++;
+		str->chars[str->length] = '\0';
 	}
 }
 
-void Remove_Char_From_Task(Task* task) {
-	if (task && task->desc.length > 0) {
-		task->desc.chars[--task->desc.length] = '\0';
+void Remove_Char_From_String(struct String* str) {
+	if (str && str->length > 0) {
+		str->chars[--str->length] = '\0';
 	}
 }
 
 void Select_Task(Tasks *tasks, int index, bool rearrange) {
 	if (index == tasks->currentSelectedTask) return;
-	if (index > tasks->tasks_count || index < 0) return;
+	if (index >= tasks->tasks_count || index < 0) return;
 
 	if (!rearrange) {
 		tasks->currentSelectedTask = index;
@@ -142,17 +127,6 @@ void Remove_Task(Tasks* task_arr, int index) {
 
 void Clean_Tasks(Tasks *task_arr) {
 	if (task_arr->tasks) {
-		for (int i = 0; i < __ID__; i++) {
-			if (task_arr->tasks[i].desc.chars) {
-				free(task_arr->tasks[i].desc.chars);
-				task_arr->tasks[i].desc.chars = NULL;
-			}
-
-			if (task_arr->tasks[i].count_expected.chars) {
-				free(task_arr->tasks[i].count_expected.chars);
-				task_arr->tasks[i].count_expected.chars = NULL;
-			}
-		}
 		free(task_arr->tasks);
 		task_arr->tasks = NULL;
 	}
