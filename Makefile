@@ -3,6 +3,8 @@ SHELL=/bin/bash
 
 CC = clang
 CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address -O0
+CPPFLAGS += -DDEBUG
+CPPFLAGS += -DAPP_TITLE="\"PomoFocus Timer"\" -DFILE_NAME="\"data.json"\"
 # CPPFLAGS += -Werror
 CFLAGS = -I./include
 LDFLAGS = -lGL -lm -lpthread -ldl -lrt -lX11 -lraylib -L./src/lib/

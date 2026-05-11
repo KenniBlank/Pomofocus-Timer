@@ -115,12 +115,10 @@ int Add_Focus_Count_To_Task(Task *task) {
 void Remove_Task(Tasks* task_arr, int index) {
 	if (index >= task_arr->tasks_count || index < 0) return;
 
-	Task task_to_remove = task_arr->tasks[index];
 	while (index < (task_arr->tasks_count - 1)) {
 		task_arr->tasks[index] = task_arr->tasks[index + 1];
 		++index;
 	}
-	task_arr->tasks[index] = task_to_remove;
 	--task_arr->tasks_count;
 	task_arr->currentSelectedTask = task_arr->tasks_count > 0? 0: -1;
 }

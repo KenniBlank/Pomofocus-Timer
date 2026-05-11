@@ -7,14 +7,15 @@
 // It seems I have to clean up data before any major edits to save and load
 // - [ ] On complete sound for break and focus, different
 
-#include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <math.h>
 
 #include "cJSON.h"
+#include "Notification.h"
 #include "raylib.h"
 
 #define CLAY_IMPLEMENTATION
@@ -38,10 +39,24 @@
 #define getFontSize(baseWidth, baseHeight, fontSize) getCubicRatio(baseWidth, baseHeight) * (fontSize)
 #define getFontHelper(data, fontSize) FONT_SIZE(getFontSize(data->baseDeviceDimensions.x, data->baseDeviceDimensions.y, fontSize))
 
-#define APP_TITLE "PomoFocus Timer"
-#define FILE_NAME "data.json"
-#define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout);
-#define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
+#ifndef APP_TITLE
+	#define APP_TITLE "PomoFocus Timer"
+#endif
+
+#ifndef FILE_NAME
+	#define FILE_NAME "data.json"
+#endif
+
+#define APP_ICON_LOC "./resources/appIcon-32.png"
+
+#ifndef DEBUG
+	#define PRINT(variable) 0
+	#define PRINT_S(variable) 0
+#else
+	#define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout);
+	#define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
+#endif
+
 #define TO_STRING(variable) #variable
 
 #define max(a, b) (a) > (b) ? (a): (b)
@@ -115,6 +130,10 @@ enum {
 
 enum {
 	SOUND_CLICK,
+
+	SOUND_FOCUS,
+	SOUND_BREAK,
+
 	SOUND_COUNT
 };
 
@@ -161,14 +180,12 @@ typedef struct {
 	AppState appState;
 	Options options;
 	TimerConstraints timerConstraints;
-
-	Device device;
-	Vector2 baseDeviceDimensions;
 	Vector2 __DEVICE_DIMENSION__; // Only for opening back again in same width
 
-	Clay_Color* colors;
-
 	Stats stats;
+	Clay_Color* colors;
+	Device device;
+	Vector2 baseDeviceDimensions;
 	SoundData sounds;
 } PomodoroData;
 
@@ -177,9 +194,8 @@ typedef struct {
 // [x] AppState
 // [x] Options
 // [x] TimerConstraints
-// 2. Device
-// 3. baseDeviceDimension
-// 4. __DEVICE_DIMENSION__
+// [x] __DEVICE_DIMENSION__
+// [ ] stats
 static int LoadData(PomodoroData* data) {
 	// TODO: handle cases with default value for deleted data
 	FILE *file = fopen(FILE_NAME, "r");
@@ -230,7 +246,9 @@ static int LoadData(PomodoroData* data) {
 			char *desc = cJSON_GetObjectItem(task, "desc")->valuestring;
 			Add_Task(&data->tasks, CreateNewTask(desc, count, expected), data->options.selectedTaskOnTop);
 		} else {
-			Add_Task(&data->tasks, CreateNewTask("", count, expected), data->options.selectedTaskOnTop);
+			if (count || expected) {
+				Add_Task(&data->tasks, CreateNewTask("", count, expected), data->options.selectedTaskOnTop);
+			}
 		}
 		data->tasks.tasks[data->tasks.currentSelectedTask].__completed__ = __completed__;
 	}
@@ -243,6 +261,15 @@ static int LoadData(PomodoroData* data) {
 	cJSON *timerConstraints = cJSON_GetObjectItem(json, "timerConstraints");
 	data->timerConstraints.timer = cJSON_GetObjectItem(timerConstraints, "timer")->valuedouble;
 
+	// __DEVICE_DIMENSION__
+	cJSON *__DEVICE_DIMENSION__ = cJSON_GetObjectItem(json, "__DEVICE_DIMENSION__");
+	cJSON *x = cJSON_GetObjectItem(__DEVICE_DIMENSION__, "x");
+	cJSON *y = cJSON_GetObjectItem(__DEVICE_DIMENSION__, "y");
+	data->__DEVICE_DIMENSION__.x = x->valueint;
+	data->__DEVICE_DIMENSION__.y = y->valueint;
+
+	// Stats
+
 	free(buffer);
 	cJSON_Delete(json);
 	fclose(file);
@@ -251,6 +278,7 @@ static int LoadData(PomodoroData* data) {
 
 // TODO: err handling later
 static int SaveData(PomodoroData* data) {
+	// Save current device size!
 	data->__DEVICE_DIMENSION__ = (Vector2) {.x = GetScreenWidth(), .y = GetScreenHeight()};
 
 	FILE *save_file = fopen(FILE_NAME, "w");
@@ -335,6 +363,23 @@ static int SaveData(PomodoroData* data) {
 	cJSON *timer = cJSON_CreateNumber(time_constraints->timer);
 	cJSON_AddItemToObject(timerConstraints, TO_STRING(timer), timer);
 
+	// __DEVICE_DIMENSION__
+	Vector2 *_DEVICE_DIMENSION_ = &data->__DEVICE_DIMENSION__;
+	cJSON *__DEVICE_DIMENSION__ = cJSON_CreateObject();
+	cJSON_AddItemToObject(json, TO_STRING(__DEVICE_DIMENSION__), __DEVICE_DIMENSION__);
+
+	cJSON *x = cJSON_CreateNumber(_DEVICE_DIMENSION_->x);
+	cJSON_AddItemToObject(__DEVICE_DIMENSION__, TO_STRING(x), x);
+	cJSON *y = cJSON_CreateNumber(_DEVICE_DIMENSION_->y);
+	cJSON_AddItemToObject(__DEVICE_DIMENSION__, TO_STRING(y), y);
+
+	// stats
+	cJSON *stats = cJSON_CreateObject();
+	cJSON_AddItemToObject(json, TO_STRING(stats), stats);
+
+	cJSON *total_stats = cJSON_CreateArray();
+	cJSON_AddItemToObject(stats, TO_STRING(total_stats), total_stats);
+
 	// Save to file and cleanups:
 	char* str = cJSON_Print(json);
 	fprintf(save_file, "%s", str);
@@ -347,7 +392,7 @@ static int SaveData(PomodoroData* data) {
 static void HANDLE_EVENTS(uint32_t*, Clay_Arena*, PomodoroData* );
 static Clay_RenderCommandArray ClayCreateLayout(PomodoroData*);
 static void HandleClayErrors(Clay_ErrorData errorData) {
-	printf("%s", errorData.errorText.chars);
+	PRINT_S(errorData.errorText.chars);
 
 	switch (errorData.errorType) {
 		case CLAY_ERROR_TYPE_ELEMENTS_CAPACITY_EXCEEDED: {
@@ -363,7 +408,7 @@ static void HandleClayErrors(Clay_ErrorData errorData) {
 		}
 
 		default: {
-			printf("Clay Error: %s\n", errorData.errorText.chars);
+			PRINT_S(errorData.errorText.chars);
 			break;
 		}
 	}
@@ -401,18 +446,17 @@ int initialize_data(PomodoroData* data) {
 			.onTaskSwitchResetTimer = true,
 		},
 		.stats = {
-			.stats = NULL,
-			.index = 0,
-			.capacity = 0,
-			.totalFocusCount = 0
+			.total_stats = NULL,
+			.capacity = 32
 		}
 	};
 
 	Init_Tasks(&data->tasks);
+	Init_Stats(&data->stats);
+
 	data->timerConstraints.timerStr = (struct String) {
 		.length = 0
 	};
-
 	data->options.time_constants[FOCUS_TIMER] = 25 * 60;
 	data->options.time_constants[LONG_BREAK_TIMER] = 15 * 60;
 	data->options.time_constants[SHORT_BREAK_TIMER] = 5 * 60;
@@ -441,8 +485,15 @@ int initialize_data(PomodoroData* data) {
 	if (data->sounds.sounds == NULL) return 1;
 	data->sounds.count = malloc(sizeof(float) * SOUND_COUNT);
 	if (data->sounds.count == NULL) return 1;
-	data->sounds.sounds[SOUND_CLICK] = LoadSound("resources/sounds/mouseClick.wav"); // TODO: load from wave instead for better control
+
+	data->sounds.sounds[SOUND_CLICK] = LoadSound("resources/sounds/mouseClick.wav");
 	data->sounds.count[SOUND_CLICK] = 1;
+
+	data->sounds.sounds[SOUND_FOCUS] = LoadSound("resources/sounds/focus.wav");
+	data->sounds.count[SOUND_FOCUS] = 3;
+
+	data->sounds.sounds[SOUND_BREAK] = LoadSound("resources/sounds/break.wav");
+	data->sounds.count[SOUND_BREAK] = 3;
 
 	return 0;
 }
@@ -451,7 +502,7 @@ void clean_data(PomodoroData* data) {
 	SaveData(data);
 
 	Clean_Tasks(&data->tasks);
-
+	Clean_Stats(&data->stats);
 	if (data->colors) {
 		free(data->colors);
 		data->colors = NULL;
@@ -469,7 +520,10 @@ void clean_data(PomodoroData* data) {
 	}
 }
 
+
 int main(void) {
+	ChangeDirectory(GetApplicationDirectory());
+
 	InitAudioDevice();
 	PomodoroData pomo_data;
 	if (initialize_data(&pomo_data)) {
@@ -512,6 +566,14 @@ int main(void) {
 
 	SetTargetFPS(24);
 	SetExitKey(KEY_NULL);
+	Image appIcon = LoadImage("resources/appIcon-256.png");
+	if (IsImageValid(appIcon)) {
+		SetWindowIcon(appIcon);
+	}
+
+	// Sound
+	bool playSound = false;
+	int playSoundCount = 0;
 
 	while (!WindowShouldClose()) {
 		HANDLE_EVENTS(&totalMemorySize, &clayMemory, &pomo_data);
@@ -519,21 +581,54 @@ int main(void) {
 			if (pomo_data.timerConstraints.timer <= 0.0f) {
 				if (pomo_data.appState == STATE_FOCUS) {
 					pomo_data.options.focusCount++;
-					Add_Focus_Count_To_Task(&pomo_data.tasks.tasks[pomo_data.tasks.currentSelectedTask]);
+					if (pomo_data.tasks.tasks_count > 0) {
+						Add_Focus_Count_To_Task(&pomo_data.tasks.tasks[pomo_data.tasks.currentSelectedTask]);
+					}
+
+					Notify(APP_TITLE, "Time for break", APP_ICON_LOC, 5);
+				} else {
+					Notify(APP_TITLE, "Time to Focus", APP_ICON_LOC, 5);
 				}
-				if (pomo_data.options.focusCount > pomo_data.options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK) {
+
+				if (pomo_data.options.focusCount >= pomo_data.options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK) {
 					pomo_data.options.focusCount = 0;
-					pomo_data.stats.stats[pomo_data.stats.index].focusTime += pomo_data.options.time_constants[FOCUS_TIMER];
+					get_today_stats(&pomo_data.stats)->focusTime += pomo_data.options.time_constants[FOCUS_TIMER];
 					pomo_data.appState = STATE_LONG_BREAK_PAUSED;
 				} else {
-					pomo_data.stats.stats[pomo_data.stats.index].breakTime += pomo_data.options.time_constants[pomo_data.appState >> 1];
+					get_today_stats(&pomo_data.stats)->breakTime += pomo_data.options.time_constants[pomo_data.appState >> 1];
 					pomo_data.appState = pomo_data.appState == STATE_FOCUS? STATE_SHORT_BREAK_PAUSED: STATE_FOCUS_PAUSED;
 				}
 				pomo_data.timerConstraints.timer = pomo_data.options.time_constants[pomo_data.appState >> 1];
+
+				playSound = true;
+				playSoundCount = 0;
 			} else {
 				pomo_data.timerConstraints.timer -= GetFrameTime();
 			}
 		}
+
+		if (IsKeyPressed(KEY_SPACE)) {
+			pomo_data.appState += pomo_data.appState % 2 == 0? 1: -1;
+			playSound = false;
+			for (int i = 0; i < SOUND_COUNT; i++) {
+				if (IsSoundPlaying(pomo_data.sounds.sounds[i])) {
+					StopSound(pomo_data.sounds.sounds[i]);
+				}
+			}
+			PlaySound(pomo_data.sounds.sounds[SOUND_CLICK]);
+		}
+
+		if (playSound) {
+			int soundToPlay = pomo_data.appState == STATE_FOCUS_PAUSED? SOUND_BREAK: SOUND_FOCUS;
+			if (!IsSoundPlaying(pomo_data.sounds.sounds[soundToPlay])) {
+				PlaySound(pomo_data.sounds.sounds[soundToPlay]);
+				playSoundCount++;
+				if (playSoundCount >= pomo_data.sounds.count[soundToPlay]) {
+					playSound = false;
+				}
+			}
+		}
+
 		float *timer = &pomo_data.timerConstraints.timer;
 		struct String *str = &pomo_data.timerConstraints.timerStr;
 		snprintf(str->chars, STR_BUFFER_CAPACITY, "%02d:%02d", (int)*timer / 60, (int)*timer % 60);
@@ -569,7 +664,9 @@ int main(void) {
 	for (int i = 0; i < FONT_SIZE; i++) {
 		UnloadFont(fonts[i]);
 	}
+
 	clean_data(&pomo_data);
+	UnloadImage(appIcon);
 	CloseAudioDevice();
 	Clay_Raylib_Close();
 	return 0;
@@ -1022,11 +1119,9 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 				g_UI_SCALE = 2.0f;
 			}
 
-			if (g_UI_SCALE < 0.8f) {
+			if (g_UI_SCALE < 0.5f) {
 				g_UI_SCALE = 0.8f;
 			}
-
-			PRINT(g_UI_SCALE);
 		}
 	}
 	if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) {

@@ -166,3 +166,18 @@ clean:
 ## Sounds
 
 - Click Sound Effect by <a href="https://pixabay.com/users/universfield-28281460/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=351398">Universfield</a> from <a href="https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=351398">Pixabay</a>
+
+***
+
+// Source - https://stackoverflow.com/a/1442131
+// Posted by Adam Rosenfield, modified by community. See post 'Timeline' for change history
+// Retrieved 2026-05-10, License - CC BY-SA 4.0
+For the get today's date part
+
+***
+
+- Break Sound Effect by <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=6416">freesound_community</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=6416">Pixabay</a>
+
+
+***
+- Focus Sound Effect by <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=102201">freesound_community</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=102201">Pixabay</a>

@@ -1,22 +1,21 @@
 #ifndef STATS_H
 #define STATS_H
 
-#include <stdint.h>
-
 struct Stat {
-	// Bitwise shift, save year_month_day
-	uint32_t date;
+	char key[11]; // XXXX-XX-XX
+
 	// In seconds
-	uint32_t focusTime;
-	uint32_t breakTime;
+	int focusTime;
+	int breakTime;
 };
 
 typedef struct {
-	struct Stat *stats;
-	int index;
+	struct Stat *total_stats;
 	int capacity;
-
-	int totalFocusCount; // Calculated on demand
 } Stats ;
+
+struct Stat *get_today_stats(Stats* stats);
+int Init_Stats(Stats *stats);
+void Clean_Stats(Stats *stats);
 
 #endif
