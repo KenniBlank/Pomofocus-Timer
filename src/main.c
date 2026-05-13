@@ -1,11 +1,12 @@
+// MVP is done!
+// One last time I will record for stats and then
+// But this is it for the video!
 // TODOs:
 // - [~] Save and Load System: Next!!
 // - [~] Modifing Task Desc, Count, Expected
 	// - [ ] Add repeating keys option + CTRL + A to select all +
 	// - [ ] Add keys left-right edit option to task
-// - [ ] On timer going off, send notification, and a signal to system: so that it can trigger some action
-// It seems I have to clean up data before any major edits to save and load
-// - [ ] On complete sound for break and focus, different
+// - [ ] On timer going off, send notification, and a signal to system
 
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +39,14 @@
 #define getCubicRatio(baseWidth, baseHeight) fmin(getWidthRatio(baseWidth), getHeightRatio(baseHeight))
 #define getFontSize(baseWidth, baseHeight, fontSize) getCubicRatio(baseWidth, baseHeight) * (fontSize)
 #define getFontHelper(data, fontSize) FONT_SIZE(getFontSize(data->baseDeviceDimensions.x, data->baseDeviceDimensions.y, fontSize))
+
+#define INVERT_CLAY_COLOR(color) \
+	color = (Clay_Color) {\
+		.r = 255 - color.r,\
+		.g = 255 - color.g,\
+		.b = 255 - color.b,\
+		.a = color.a\
+	};
 
 #ifndef APP_TITLE
 	#define APP_TITLE "PomoFocus Timer"
@@ -78,6 +87,7 @@
 bool g_reinit_clay;
 float g_UI_SCALE;
 bool g_task_index;
+bool g_playSound;
 
 enum {
 	FONT_ID_DEFAULT,
@@ -139,7 +149,7 @@ enum {
 
 typedef struct {
 	Sound* sounds;
-	float* count; // How many times to play sound!
+	int* count; // How many times to play sound!
 } SoundData;
 
 typedef enum {
@@ -182,7 +192,8 @@ typedef struct {
 	TimerConstraints timerConstraints;
 	Vector2 __DEVICE_DIMENSION__; // Only for opening back again in same width
 
-	Stats stats;
+	Stat stat_today;
+
 	Clay_Color* colors;
 	Device device;
 	Vector2 baseDeviceDimensions;
@@ -269,6 +280,18 @@ static int LoadData(PomodoroData* data) {
 	data->__DEVICE_DIMENSION__.y = y->valueint;
 
 	// Stats
+	if (cJSON_HasObjectItem(json, "stat_today")) {
+		cJSON *stat_today = cJSON_GetObjectItem(json, "stat_today");
+
+		if (strcmp(data->stat_today.key, cJSON_GetObjectItem(stat_today, "key")->valuestring) == 0) {
+			strcpy(data->stat_today.key, cJSON_GetObjectItem(stat_today, "key")->valuestring);
+			data->stat_today.focusTime = cJSON_GetObjectItem(stat_today, "focusTime")->valueint;
+			data->stat_today.breakTime = cJSON_GetObjectItem(stat_today, "breakTime")->valueint;
+		} else {
+			// Save to a file cause this is old stats
+			Save_Stat(data->stat_today);
+		}
+	}
 
 	free(buffer);
 	cJSON_Delete(json);
@@ -374,11 +397,14 @@ static int SaveData(PomodoroData* data) {
 	cJSON_AddItemToObject(__DEVICE_DIMENSION__, TO_STRING(y), y);
 
 	// stats
-	cJSON *stats = cJSON_CreateObject();
-	cJSON_AddItemToObject(json, TO_STRING(stats), stats);
-
-	cJSON *total_stats = cJSON_CreateArray();
-	cJSON_AddItemToObject(stats, TO_STRING(total_stats), total_stats);
+	cJSON *stat_today = cJSON_CreateObject();
+	cJSON_AddItemToObject(json, "stat_today", stat_today);
+	cJSON *key = cJSON_CreateString(data->stat_today.key);
+	cJSON_AddItemToObject(stat_today, "key", key);
+	cJSON *focusTime = cJSON_CreateNumber(data->stat_today.focusTime);
+	cJSON_AddItemToObject(stat_today, TO_STRING(focusTime), focusTime);
+	cJSON *breakTime = cJSON_CreateNumber(data->stat_today.breakTime);
+	cJSON_AddItemToObject(stat_today, TO_STRING(breakTime), breakTime);
 
 	// Save to file and cleanups:
 	char* str = cJSON_Print(json);
@@ -419,22 +445,13 @@ int initialize_data(PomodoroData* data) {
 	g_UI_SCALE = 2.0f; // TODO: set to 1 on release
 	g_reinit_clay = false;
 	g_task_index = true;
+	g_playSound = false;
 
-	// Pomodata initialization
+	// Pomodata Defaults:
 	*data = (PomodoroData) {
 		.appState = STATE_FOCUS_PAUSED,
-		.baseDeviceDimensions = {
-			.x = DEVICE_SMART_PHONE_W * g_UI_SCALE,
-			.y = (DEVICE_SMART_PHONE_W * 1.5f) * g_UI_SCALE,
-		},
-		.__DEVICE_DIMENSION__ = {
-			.x = DEVICE_SMART_PHONE_W * g_UI_SCALE,
-			.y = (DEVICE_SMART_PHONE_W * 1.5f) * g_UI_SCALE
-		},
-		.colors = NULL,
-		.sounds.sounds = NULL,
-		.sounds.count = NULL,
-		.tasks = NULL,
+		.baseDeviceDimensions = { .x = DEVICE_SMART_PHONE_W * g_UI_SCALE, .y = (DEVICE_SMART_PHONE_W * 1.5f) * g_UI_SCALE },
+		.__DEVICE_DIMENSION__ = { .x = DEVICE_SMART_PHONE_W * g_UI_SCALE, .y = (DEVICE_SMART_PHONE_W * 1.5f) * g_UI_SCALE },
 		.options = {
 			.masterVolume = 0.2f,
 			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = 4,
@@ -445,14 +462,10 @@ int initialize_data(PomodoroData* data) {
 			.selectedTaskOnTop = true,
 			.onTaskSwitchResetTimer = true,
 		},
-		.stats = {
-			.total_stats = NULL,
-			.capacity = 32
-		}
+		.stat_today = create_today_stats()
 	};
 
 	Init_Tasks(&data->tasks);
-	Init_Stats(&data->stats);
 
 	data->timerConstraints.timerStr = (struct String) {
 		.length = 0
@@ -462,10 +475,9 @@ int initialize_data(PomodoroData* data) {
 	data->options.time_constants[SHORT_BREAK_TIMER] = 5 * 60;
 	data->timerConstraints.timer = data->options.time_constants[data->appState];
 
-	LoadData(data);
-
 	data->colors = malloc(sizeof(Clay_Color) * COLOR_SIZE);
 	if (data->colors == NULL) return 1;
+
 	data->colors[COLOR_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 252, .g = 252, .b = 252, .a = 255};
 	data->colors[COLOR_BACKGROUND_ACTIVE] = (Clay_Color) {.r = 178, .g = 242, .b = 187, .a = 255};
 	data->colors[COLOR_BACKGROUND_MAIN_INACTIVE] = data->colors[COLOR_BACKGROUND_INACTIVE];
@@ -483,18 +495,16 @@ int initialize_data(PomodoroData* data) {
 
 	data->sounds.sounds = malloc(sizeof(Sound) * SOUND_COUNT);
 	if (data->sounds.sounds == NULL) return 1;
-	data->sounds.count = malloc(sizeof(float) * SOUND_COUNT);
+	data->sounds.count = malloc(sizeof(int) * SOUND_COUNT);
 	if (data->sounds.count == NULL) return 1;
-
 	data->sounds.sounds[SOUND_CLICK] = LoadSound("resources/sounds/mouseClick.wav");
 	data->sounds.count[SOUND_CLICK] = 1;
-
 	data->sounds.sounds[SOUND_FOCUS] = LoadSound("resources/sounds/focus.wav");
-	data->sounds.count[SOUND_FOCUS] = 3;
-
+	data->sounds.count[SOUND_FOCUS] = -1;
 	data->sounds.sounds[SOUND_BREAK] = LoadSound("resources/sounds/break.wav");
-	data->sounds.count[SOUND_BREAK] = 3;
+	data->sounds.count[SOUND_BREAK] = -1;
 
+	LoadData(data);
 	return 0;
 }
 
@@ -502,7 +512,6 @@ void clean_data(PomodoroData* data) {
 	SaveData(data);
 
 	Clean_Tasks(&data->tasks);
-	Clean_Stats(&data->stats);
 	if (data->colors) {
 		free(data->colors);
 		data->colors = NULL;
@@ -519,7 +528,6 @@ void clean_data(PomodoroData* data) {
 		data->sounds.count = NULL;
 	}
 }
-
 
 int main(void) {
 	ChangeDirectory(GetApplicationDirectory());
@@ -566,17 +574,20 @@ int main(void) {
 
 	SetTargetFPS(24);
 	SetExitKey(KEY_NULL);
-	Image appIcon = LoadImage("resources/appIcon-256.png");
+	Image appIcon = LoadImage(APP_ICON_LOC);
 	if (IsImageValid(appIcon)) {
 		SetWindowIcon(appIcon);
 	}
 
 	// Sound
-	bool playSound = false;
 	int playSoundCount = 0;
-
 	while (!WindowShouldClose()) {
 		HANDLE_EVENTS(&totalMemorySize, &clayMemory, &pomo_data);
+		if (strcmp(pomo_data.stat_today.key, create_today_stats().key)) {
+			Save_Stat(pomo_data.stat_today);
+			pomo_data.stat_today = create_today_stats();
+		}
+
 		if (pomo_data.appState % 2 == 0) {
 			if (pomo_data.timerConstraints.timer <= 0.0f) {
 				if (pomo_data.appState == STATE_FOCUS) {
@@ -584,32 +595,32 @@ int main(void) {
 					if (pomo_data.tasks.tasks_count > 0) {
 						Add_Focus_Count_To_Task(&pomo_data.tasks.tasks[pomo_data.tasks.currentSelectedTask]);
 					}
-
+					pomo_data.stat_today.focusTime += pomo_data.options.time_constants[FOCUS_TIMER];
 					Notify(APP_TITLE, "Time for break", APP_ICON_LOC, 5);
 				} else {
 					Notify(APP_TITLE, "Time to Focus", APP_ICON_LOC, 5);
+					pomo_data.stat_today.breakTime += pomo_data.options.time_constants[pomo_data.appState >> 1];
 				}
 
 				if (pomo_data.options.focusCount >= pomo_data.options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK) {
 					pomo_data.options.focusCount = 0;
-					get_today_stats(&pomo_data.stats)->focusTime += pomo_data.options.time_constants[FOCUS_TIMER];
 					pomo_data.appState = STATE_LONG_BREAK_PAUSED;
 				} else {
-					get_today_stats(&pomo_data.stats)->breakTime += pomo_data.options.time_constants[pomo_data.appState >> 1];
 					pomo_data.appState = pomo_data.appState == STATE_FOCUS? STATE_SHORT_BREAK_PAUSED: STATE_FOCUS_PAUSED;
 				}
 				pomo_data.timerConstraints.timer = pomo_data.options.time_constants[pomo_data.appState >> 1];
 
-				playSound = true;
+				g_playSound = true;
 				playSoundCount = 0;
 			} else {
 				pomo_data.timerConstraints.timer -= GetFrameTime();
 			}
 		}
 
-		if (IsKeyPressed(KEY_SPACE)) {
+		// On space, start/stop switch and stop any sound playing iff pressed:
+		if (IsKeyPressed(KEY_SPACE) && !pomo_data.tasks.isEditing) {
 			pomo_data.appState += pomo_data.appState % 2 == 0? 1: -1;
-			playSound = false;
+			g_playSound = false;
 			for (int i = 0; i < SOUND_COUNT; i++) {
 				if (IsSoundPlaying(pomo_data.sounds.sounds[i])) {
 					StopSound(pomo_data.sounds.sounds[i]);
@@ -618,13 +629,15 @@ int main(void) {
 			PlaySound(pomo_data.sounds.sounds[SOUND_CLICK]);
 		}
 
-		if (playSound) {
+		if (g_playSound) {
 			int soundToPlay = pomo_data.appState == STATE_FOCUS_PAUSED? SOUND_BREAK: SOUND_FOCUS;
 			if (!IsSoundPlaying(pomo_data.sounds.sounds[soundToPlay])) {
 				PlaySound(pomo_data.sounds.sounds[soundToPlay]);
-				playSoundCount++;
-				if (playSoundCount >= pomo_data.sounds.count[soundToPlay]) {
-					playSound = false;
+				if (pomo_data.sounds.count[soundToPlay] != -1) {
+					playSoundCount++;
+				}
+				if (playSoundCount >= pomo_data.sounds.count[soundToPlay] && playSoundCount != 0) {
+					g_playSound = false;
 				}
 			}
 		}
@@ -756,7 +769,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 	}
 
 	if (!task->__countExpectedDefined__ && (data->tasks.isEditing != IS_EDITING_TASK_COUNT_EXPECTED || data->tasks.currentSelectedTask != taskIndex)) {
-		snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%s", "0 / 0");
+		snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / 0", task->count);
 		task->count_expected.length = strlen(task->count_expected.chars);
 	}
 
@@ -772,7 +785,10 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 				if (data->options.onTaskSwitchResetTimer && !(data->tasks.currentSelectedTask == taskIndex)) {
 					data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 				}
-				Select_Task(&data->tasks, taskIndex, data->options.selectedTaskOnTop);
+				if (taskIndex != data->tasks.currentSelectedTask) {
+					Select_Task(&data->tasks, taskIndex, data->options.selectedTaskOnTop);
+					PlaySound(data->sounds.sounds[SOUND_CLICK]);
+				}
 				Clay_UpdateScrollContainers(true, (Clay_Vector2) { .x = 0.0f, .y = 0.0f }, GetFrameTime());
 			}
 		}
@@ -997,7 +1013,8 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 			SelectedString = EDITING_STATE == IS_EDITING_TASK_DESC? &data->tasks.tasks[data->tasks.currentSelectedTask].desc: &data->tasks.tasks[data->tasks.currentSelectedTask].count_expected;
 			struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 
-			sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected);
+			int NA;
+			sscanf(SelectedString->chars, "%d / %d", &NA, &task->expected);
 			snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 			task->count_expected.length = strlen(task->count_expected.chars);
 			SelectedString->chars[SelectedString->length] = '\0';
@@ -1028,9 +1045,8 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 
 		case 1: {
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) > 0) {
-					task->__countExpectedDefined__ = true;
-				}
+				int NA;
+				sscanf(SelectedString->chars, "%d / %d", &NA, &task->expected);
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
@@ -1054,7 +1070,8 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 
 		case 3: {
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected);
+				int NA;
+				sscanf(SelectedString->chars, "%d / %d", &NA, &task->expected);
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
@@ -1067,7 +1084,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		}
 	}
 
-	task->__countExpectedDefined__ = task->count > 0;
+	task->__countExpectedDefined__ = task->expected > 0;
 	task->__descDefined__ = task->desc.length > 0;
 }
 
@@ -1106,6 +1123,12 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 
 	if (data->tasks.isEditing == IS_NOT_EDITING) {
 		if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+			if (IsKeyPressed(KEY_R)) {
+				for (int i = 0; i < COLOR_SIZE; i++) {
+					INVERT_CLAY_COLOR(data->colors[i]);
+				}
+			}
+
 			if (IsKeyDown(KEY_KP_ADD) || IsKeyDown(KEY_EQUAL)) {
 				g_UI_SCALE += 0.1f;
 			} else if (IsKeyDown(KEY_MINUS)) {
@@ -1451,6 +1474,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 				if (Clay_PointerOver(Clay_GetElementId(ADD_TASK)) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 					Add_Task(&data->tasks, CreateNewTask("", 0, 0), data->options.selectedTaskOnTop);
 					data->tasks.isEditing = IS_EDITING_TASK_DESC;
+					PlaySound(data->sounds.sounds[SOUND_CLICK]);
 
 					if (data->options.onTaskSwitchResetTimer) data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 				}
@@ -1462,6 +1486,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 					RenderButton(REMOVE_TASK, COLOR_BACKGROUND_SS_BUTTON_SELECTED, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 					if (Clay_PointerOver(Clay_GetElementId(REMOVE_TASK)) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 						Remove_Task(&data->tasks, data->tasks.currentSelectedTask);
+						PlaySound(data->sounds.sounds[SOUND_CLICK]);
 					}
 				}
 			}
@@ -1506,6 +1531,14 @@ void Device_Smart_Phone(PomodoroData* data) {
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
 		data->appState += data->appState % 2 == 0? 1: -1;
+		PlaySound(data->sounds.sounds[SOUND_CLICK]);
+
+		g_playSound = false;
+		for (int i = 0; i < SOUND_COUNT; i++) {
+			if (IsSoundPlaying(data->sounds.sounds[i])) {
+				StopSound(data->sounds.sounds[i]);
+			}
+		}
 		PlaySound(data->sounds.sounds[SOUND_CLICK]);
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Focus))) {
 		if (data->appState != STATE_FOCUS && data->appState != STATE_FOCUS_PAUSED) {

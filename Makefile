@@ -1,9 +1,10 @@
 .PHONY: clean crun build/app all
 SHELL=/bin/bash
 
-CC = clang
+CC = gcc
 CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address -O0
 CPPFLAGS += -DDEBUG
+# CPPFLAGS = -O3 -std=c99
 CPPFLAGS += -DAPP_TITLE="\"PomoFocus Timer"\" -DFILE_NAME="\"data.json"\"
 # CPPFLAGS += -Werror
 CFLAGS = -I./include

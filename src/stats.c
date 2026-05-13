@@ -1,12 +1,10 @@
 #include "stats.h"
-#include <stdlib.h>
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-// time_t t = time(NULL);
-// struct tm tm = *localtime(&t);
-// data->stats.total_stats[0].__day__ = tm.tm_mday;
-// data->stats.total_stats[0].__month__ = tm.tm_mon + 1;
-// data->stats.total_stats[0].__year__ = (tm.tm_year + 1900);
+#define SAVE_FILE "stats.json"
+#include "cJSON.h"
 
 static void get_key(char *key, int year, int month, int day) {
 	// 0-3 Year
@@ -30,23 +28,51 @@ static void get_key(char *key, int year, int month, int day) {
 	key[10] = '\0';
 }
 
-struct Stat *get_today_stats(Stats* stats) {
-	return &stats->total_stats[0];
+Stat create_today_stats(void) {
+	Stat stat;
+
+	time_t t = time(NULL);
+	struct tm tm = *localtime(&t);
+
+	int day = tm.tm_mday;
+	int month = tm.tm_mon + 1;
+	int year = (tm.tm_year + 1900);
+	get_key(stat.key, year, month, day);
+
+	stat.breakTime = 0;
+	stat.focusTime = 0;
+
+	return stat;
 }
 
-int Init_Stats(Stats *stats) {
-	stats->capacity = 32;
-	stats->total_stats = malloc(sizeof(struct Stat) * stats->capacity);
-	if (stats->total_stats) {
-		return 0;
-	}
-	get_key(stats->total_stats[0].key, 2026, 11, 06);
-	return 1;
-}
+int Save_Stat(Stat save_stat) {
+	FILE *file = fopen(SAVE_FILE, "r");
+	fseek(file, 0, SEEK_END);
+	long fileSize = ftell(file);
+	fseek(file, 0, SEEK_SET);
+	char *buffer = (char *) malloc(fileSize + 1);
+	fread(buffer, sizeof(char), fileSize, file);
+	buffer[fileSize] = '\0';
+	fclose(file);
 
-void Clean_Stats(Stats *stats) {
-	if (stats->total_stats) {
-		free(stats->total_stats);
-		stats->total_stats = NULL;
-	}
+	file = fopen(SAVE_FILE, "w");
+
+	cJSON *json = cJSON_Parse(buffer);
+
+	cJSON *key = cJSON_CreateObject();
+	cJSON_AddItemToObject(json, save_stat.key, key);
+
+	cJSON *focusTime = cJSON_CreateNumber(save_stat.focusTime);
+	cJSON_AddItemToObject(key, "focusTime", focusTime);
+	cJSON *breakTime = cJSON_CreateNumber(save_stat.breakTime);
+	cJSON_AddItemToObject(key, "breakTime", breakTime);
+
+	char *str = cJSON_Print(json);
+	fputs(str, file);
+
+	free(str);
+	free(buffer);
+	cJSON_Delete(json);
+	fclose(file);
+	return 0;
 }
