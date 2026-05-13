@@ -47,32 +47,49 @@ Stat create_today_stats(void) {
 
 int Save_Stat(Stat save_stat) {
 	FILE *file = fopen(SAVE_FILE, "r");
-	fseek(file, 0, SEEK_END);
-	long fileSize = ftell(file);
-	fseek(file, 0, SEEK_SET);
-	char *buffer = (char *) malloc(fileSize + 1);
-	fread(buffer, sizeof(char), fileSize, file);
-	buffer[fileSize] = '\0';
-	fclose(file);
+	cJSON *json = NULL;
 
-	file = fopen(SAVE_FILE, "w");
+	// Read existing file
+	if (file) {
+		fseek(file, 0, SEEK_END);
+		long fileSize = ftell(file);
+		fseek(file, 0, SEEK_SET);
 
-	cJSON *json = cJSON_Parse(buffer);
+		char *buffer = malloc(fileSize + 1);
 
+		fread(buffer, 1, fileSize, file);
+		buffer[fileSize] = '\0';
+
+		fclose(file);
+
+		json = cJSON_Parse(buffer);
+
+		free(buffer);
+	}
+
+	// Empty/missing file
+	if (!json) {
+		json = cJSON_CreateObject();
+	}
+
+	// Remove old entry if exists
+	cJSON_DeleteItemFromObject(json, save_stat.key);
+
+	// Create stat object
 	cJSON *key = cJSON_CreateObject();
 	cJSON_AddItemToObject(json, save_stat.key, key);
 
-	cJSON *focusTime = cJSON_CreateNumber(save_stat.focusTime);
-	cJSON_AddItemToObject(key, "focusTime", focusTime);
-	cJSON *breakTime = cJSON_CreateNumber(save_stat.breakTime);
-	cJSON_AddItemToObject(key, "breakTime", breakTime);
+	cJSON_AddNumberToObject(key, "focusTime", save_stat.focusTime);
+	cJSON_AddNumberToObject(key, "breakTime", save_stat.breakTime);
 
+	// Write file
+	file = fopen(SAVE_FILE, "w");
 	char *str = cJSON_Print(json);
-	fputs(str, file);
 
-	free(str);
-	free(buffer);
-	cJSON_Delete(json);
+	fputs(str, file);
 	fclose(file);
+	free(str);
+	cJSON_Delete(json);
+
 	return 0;
 }
