@@ -6,8 +6,8 @@ A pomodoro timer made using:
 - [CLAY](https://github.com/nicbarker/clay/)
 
 ## ScreenShots:
-![Active](Design/App_Active.png)
 ![Inactive](Design/App_Inactive.png)
+![Active](Design/App_Active.png)
 
 ## Attributions
 ### Audio
