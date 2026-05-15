@@ -52,10 +52,7 @@
 	#define APP_TITLE "PomoFocus Timer"
 #endif
 
-#ifndef FILE_NAME
-	#define FILE_NAME "data.json"
-#endif
-
+#define FILE_NAME "data.json"
 #define APP_ICON_LOC "./resources/appIcon-32.png"
 
 #ifndef DEBUG
@@ -65,8 +62,6 @@
 	#define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout);
 	#define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
 #endif
-
-#define TO_STRING(variable) #variable
 
 #define max(a, b) (a) > (b) ? (a): (b)
 #define min(a, b) (a) > (b) ? (b): (a)
@@ -194,22 +189,19 @@ typedef struct {
 
 	Stat stat_today;
 
-	Clay_Color* colors;
+	Clay_Color colors[COLOR_SIZE];
 	Device device;
 	Vector2 baseDeviceDimensions;
 	SoundData sounds;
 } PomodoroData;
 
-// Things to Save and Load:
-// [x] Tasks
-// [x] AppState
-// [x] Options
-// [x] TimerConstraints
-// [x] __DEVICE_DIMENSION__
-// [ ] stats
 static int LoadData(PomodoroData* data) {
 	// TODO: handle cases with default value for deleted data
 	FILE *file = fopen(FILE_NAME, "r");
+	if (file == NULL) {
+		return 1; // Todo: handle Error
+	}
+
 	fseek(file, 0, SEEK_END);
 	long fileSize = ftell(file);
 	fseek(file, 0, SEEK_SET);
@@ -288,7 +280,6 @@ static int LoadData(PomodoroData* data) {
 			data->stat_today.focusTime = cJSON_GetObjectItem(stat_today, "focusTime")->valueint;
 			data->stat_today.breakTime = cJSON_GetObjectItem(stat_today, "breakTime")->valueint;
 		} else {
-			// Save to a file cause this is old stats
 			Save_Stat(data->stat_today);
 		}
 	}
@@ -309,92 +300,92 @@ static int SaveData(PomodoroData* data) {
 
 	// Tasks:
 	cJSON *tasks = cJSON_CreateObject();
-	cJSON_AddItemToObject(json, TO_STRING(tasks), tasks);
+	cJSON_AddItemToObject(json, "tasks", tasks);
 
 	cJSON *tasks_arr = cJSON_CreateArray();
 	cJSON_AddItemToObject(tasks, "tasks", tasks_arr);
 
 	cJSON *currentSelectedTask = cJSON_CreateNumber(data->tasks.currentSelectedTask);
-	cJSON_AddItemToObject(tasks, TO_STRING(currentSelectedTask), currentSelectedTask);
+	cJSON_AddItemToObject(tasks, "currentSelectedTask", currentSelectedTask);
 
 	for (int i = data->tasks.tasks_count - 1; i >= 0; --i) {
 		struct Task *task = &data->tasks.tasks[i];
 
-	        cJSON *tsk = cJSON_CreateObject();
-	        cJSON_AddItemToArray(tasks_arr, tsk);
+		cJSON *tsk = cJSON_CreateObject();
+		cJSON_AddItemToArray(tasks_arr, tsk);
 
 		cJSON *count = cJSON_CreateNumber(task->count);
-		cJSON_AddItemToObject(tsk, TO_STRING(count), count);
+		cJSON_AddItemToObject(tsk, "count", count);
 
 		cJSON *expected = cJSON_CreateNumber(task->expected);
-		cJSON_AddItemToObject(tsk, TO_STRING(expected), expected);
+		cJSON_AddItemToObject(tsk, "expected", expected);
 
 		cJSON *__completed__ = cJSON_CreateNumber(task->__completed__);
-		cJSON_AddItemToObject(tsk, TO_STRING(__completed__), __completed__);
+		cJSON_AddItemToObject(tsk, "__completed__", __completed__);
 
 		cJSON *__descDefined__ = cJSON_CreateNumber(task->__descDefined__);
-		cJSON_AddItemToObject(tsk, TO_STRING(__descDefined__), __descDefined__);
+		cJSON_AddItemToObject(tsk, "__descDefined__", __descDefined__);
 
 		if (task->__descDefined__) {
 			cJSON *desc = cJSON_CreateString(!task->desc.length? " ": task->desc.chars);
-			cJSON_AddItemToObject(tsk, TO_STRING(desc), desc);
+			cJSON_AddItemToObject(tsk, "desc", desc);
 		}
 	}
 
 	// AppState
 	cJSON *appState = cJSON_CreateNumber(data->appState);
-	cJSON_AddItemToObject(json, TO_STRING(appState), appState);
+	cJSON_AddItemToObject(json, "appState", appState);
 
 	// Options:
 	Options* opts = &data->options;
 
 	cJSON *options = cJSON_CreateObject();
-	cJSON_AddItemToObject(json, TO_STRING(options), options);
+	cJSON_AddItemToObject(json, "options", options);
 
 	cJSON *masterVolume = cJSON_CreateNumber(opts->masterVolume);
-	cJSON_AddItemToObject(options, TO_STRING(masterVolume), masterVolume);
+	cJSON_AddItemToObject(options, "masterVolume", masterVolume);
 
 	cJSON *focusCount = cJSON_CreateNumber(opts->focusCount);
-	cJSON_AddItemToObject(options, TO_STRING(focusCount), focusCount);
+	cJSON_AddItemToObject(options, "focusCount", focusCount);
 
 	cJSON *FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = cJSON_CreateNumber(opts->FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK);
-	cJSON_AddItemToObject(options, TO_STRING(FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK), FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK);
+	cJSON_AddItemToObject(options, "FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK", FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK);
 
 	cJSON *REPEAT_DELAY = cJSON_CreateNumber(opts->REPEAT_DELAY);
-	cJSON_AddItemToObject(options, TO_STRING(REPEAT_DELAY), REPEAT_DELAY);
+	cJSON_AddItemToObject(options, "REPEAT_DELAY", REPEAT_DELAY);
 
 	cJSON *REPEAT_INTERVAL = cJSON_CreateNumber(opts->REPEAT_INTERVAL);
-	cJSON_AddItemToObject(options, TO_STRING(REPEAT_INTERVAL), REPEAT_INTERVAL);
+	cJSON_AddItemToObject(options, "REPEAT_INTERVAL", REPEAT_INTERVAL);
 
 	cJSON *SCROLL_MULTIPLIER = cJSON_CreateNumber(opts->SCROLL_MULTIPLIER);
-	cJSON_AddItemToObject(options, TO_STRING(SCROLL_MULTIPLIER), SCROLL_MULTIPLIER);
+	cJSON_AddItemToObject(options, "SCROLL_MULTIPLIER", SCROLL_MULTIPLIER);
 
 	cJSON *selectedTaskOnTop = cJSON_CreateNumber(opts->selectedTaskOnTop);
-	cJSON_AddItemToObject(options, TO_STRING(selectedTaskOnTop), selectedTaskOnTop);
+	cJSON_AddItemToObject(options, "selectedTaskOnTop", selectedTaskOnTop);
 
 	cJSON *onTaskSwitchResetTimer = cJSON_CreateNumber(opts->onTaskSwitchResetTimer);
-	cJSON_AddItemToObject(options, TO_STRING(onTaskSwitchResetTimer), onTaskSwitchResetTimer);
+	cJSON_AddItemToObject(options, "onTaskSwitchResetTimer", onTaskSwitchResetTimer);
 
 	cJSON *time_constants = cJSON_CreateIntArray(opts->time_constants, 3);
-	cJSON_AddItemToObject(options, TO_STRING(time_constants), time_constants);
+	cJSON_AddItemToObject(options, "time_constants", time_constants);
 
 	// Timer Constraints
 	TimerConstraints *time_constraints = &data->timerConstraints;
 	cJSON *timerConstraints = cJSON_CreateObject();
-	cJSON_AddItemToObject(json, TO_STRING(timerConstraints), timerConstraints);
+	cJSON_AddItemToObject(json, "timerConstraints", timerConstraints);
 
 	cJSON *timer = cJSON_CreateNumber(time_constraints->timer);
-	cJSON_AddItemToObject(timerConstraints, TO_STRING(timer), timer);
+	cJSON_AddItemToObject(timerConstraints, "timer", timer);
 
 	// __DEVICE_DIMENSION__
 	Vector2 *_DEVICE_DIMENSION_ = &data->__DEVICE_DIMENSION__;
 	cJSON *__DEVICE_DIMENSION__ = cJSON_CreateObject();
-	cJSON_AddItemToObject(json, TO_STRING(__DEVICE_DIMENSION__), __DEVICE_DIMENSION__);
+	cJSON_AddItemToObject(json, "__DEVICE_DIMENSION__", __DEVICE_DIMENSION__);
 
 	cJSON *x = cJSON_CreateNumber(_DEVICE_DIMENSION_->x);
-	cJSON_AddItemToObject(__DEVICE_DIMENSION__, TO_STRING(x), x);
+	cJSON_AddItemToObject(__DEVICE_DIMENSION__, "x", x);
 	cJSON *y = cJSON_CreateNumber(_DEVICE_DIMENSION_->y);
-	cJSON_AddItemToObject(__DEVICE_DIMENSION__, TO_STRING(y), y);
+	cJSON_AddItemToObject(__DEVICE_DIMENSION__, "y", y);
 
 	// stats
 	cJSON *stat_today = cJSON_CreateObject();
@@ -402,9 +393,9 @@ static int SaveData(PomodoroData* data) {
 	cJSON *key = cJSON_CreateString(data->stat_today.key);
 	cJSON_AddItemToObject(stat_today, "key", key);
 	cJSON *focusTime = cJSON_CreateNumber(data->stat_today.focusTime);
-	cJSON_AddItemToObject(stat_today, TO_STRING(focusTime), focusTime);
+	cJSON_AddItemToObject(stat_today, "focusTime", focusTime);
 	cJSON *breakTime = cJSON_CreateNumber(data->stat_today.breakTime);
-	cJSON_AddItemToObject(stat_today, TO_STRING(breakTime), breakTime);
+	cJSON_AddItemToObject(stat_today, "breakTime", breakTime);
 
 	// Save to file and cleanups:
 	char* str = cJSON_Print(json);
@@ -440,9 +431,31 @@ static void HandleClayErrors(Clay_ErrorData errorData) {
 	}
 }
 
+void THEME_LIGHT(PomodoroData *data) {
+	data->colors[COLOR_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 252, .g = 252, .b = 252, .a = 255};
+	data->colors[COLOR_BACKGROUND_ACTIVE] = (Clay_Color) {.r = 242, .g = 242, .b = 242, .a = 255};
+
+	data->colors[COLOR_BACKGROUND_MAIN_INACTIVE] = data->colors[COLOR_BACKGROUND_INACTIVE];
+	data->colors[COLOR_BACKGROUND_MAIN_ACTIVE] = (Clay_Color) {.r = 178, .g = 242, .b = 187, .a = 255};
+
+	data->colors[COLOR_BACKGROUND_TASKS] = data->colors[COLOR_BACKGROUND_INACTIVE];
+	data->colors[COLOR_SELECTED_TASK_INDICATOR] = (Clay_Color) {.r = 200, .g = 100, .b = 100, .a = 255};
+	data->colors[COLOR_BACKGROUND_SELECTED_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
+	data->colors[COLOR_BACKGROUND_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
+
+	data->colors[COLOR_BACKGROUND_FSL_BUTTON] = (Clay_Color) {.r = 240, .g = 240, .b = 240, .a = 255};
+	data->colors[COLOR_BACKGROUND_FSL_BUTTON_SELECTED] = data->colors[COLOR_BACKGROUND_ACTIVE];
+
+	data->colors[COLOR_BACKGROUND_SS_BUTTON] = (Clay_Color) {.r = 255, .g = 249, .b = 219, .a = 255};
+	data->colors[COLOR_BACKGROUND_SS_BUTTON_SELECTED] = (Clay_Color) {.r = 250, .g = 82, .b = 82, .a = 255};
+
+	data->colors[COLOR_TXT] = (Clay_Color){33, 37, 41, 255};
+	data->colors[COLOR_BORDER] = (Clay_Color){100, 100, 100, 255};
+}
+
 int initialize_data(PomodoroData* data) {
 	// Global Data
-	g_UI_SCALE = 2.0f; // TODO: set to 1 on release
+	g_UI_SCALE = 1.0f;
 	g_reinit_clay = false;
 	g_task_index = true;
 	g_playSound = false;
@@ -456,8 +469,8 @@ int initialize_data(PomodoroData* data) {
 			.masterVolume = 0.2f,
 			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = 4,
 			.focusCount = 0,
-			.REPEAT_DELAY = 0.30f, // 300ms
-			.REPEAT_INTERVAL = 0.03f, // 30ms
+			.REPEAT_DELAY = 0.30f,
+			.REPEAT_INTERVAL = 0.06f,
 			.SCROLL_MULTIPLIER = 10.0f,
 			.selectedTaskOnTop = true,
 			.onTaskSwitchResetTimer = true,
@@ -475,23 +488,8 @@ int initialize_data(PomodoroData* data) {
 	data->options.time_constants[SHORT_BREAK_TIMER] = 5 * 60;
 	data->timerConstraints.timer = data->options.time_constants[data->appState];
 
-	data->colors = malloc(sizeof(Clay_Color) * COLOR_SIZE);
-	if (data->colors == NULL) return 1;
-
-	data->colors[COLOR_BACKGROUND_INACTIVE] = (Clay_Color) {.r = 252, .g = 252, .b = 252, .a = 255};
-	data->colors[COLOR_BACKGROUND_ACTIVE] = (Clay_Color) {.r = 178, .g = 242, .b = 187, .a = 255};
-	data->colors[COLOR_BACKGROUND_MAIN_INACTIVE] = data->colors[COLOR_BACKGROUND_INACTIVE];
-	data->colors[COLOR_BACKGROUND_MAIN_ACTIVE] = data->colors[COLOR_BACKGROUND_ACTIVE];
-	data->colors[COLOR_BACKGROUND_TASKS] = data->colors[COLOR_BACKGROUND_INACTIVE];
-	data->colors[COLOR_SELECTED_TASK_INDICATOR] = (Clay_Color) {.r = 200, .g = 100, .b = 100, .a = 255};
-	data->colors[COLOR_BACKGROUND_SELECTED_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
-	data->colors[COLOR_BACKGROUND_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
-	data->colors[COLOR_BACKGROUND_FSL_BUTTON] = (Clay_Color) {.r = 240, .g = 240, .b = 240, .a = 255};
-	data->colors[COLOR_BACKGROUND_FSL_BUTTON_SELECTED] = data->colors[COLOR_BACKGROUND_INACTIVE];
-	data->colors[COLOR_BACKGROUND_SS_BUTTON] = (Clay_Color) {.r = 255, .g = 249, .b = 219, .a = 255};
-	data->colors[COLOR_BACKGROUND_SS_BUTTON_SELECTED] = (Clay_Color) {.r = 250, .g = 82, .b = 82, .a = 255};
-	data->colors[COLOR_TXT] = (Clay_Color) {.r = 0, .g = 0, .b = 0, .a = 255};
-	data->colors[COLOR_BORDER] = data->colors[COLOR_TXT];
+	// Colors Definitions:
+	THEME_LIGHT(data);
 
 	data->sounds.sounds = malloc(sizeof(Sound) * SOUND_COUNT);
 	if (data->sounds.sounds == NULL) return 1;
@@ -512,10 +510,6 @@ void clean_data(PomodoroData* data) {
 	SaveData(data);
 
 	Clean_Tasks(&data->tasks);
-	if (data->colors) {
-		free(data->colors);
-		data->colors = NULL;
-	}
 	if (data->sounds.sounds) {
 		for (int i = 0; i < SOUND_COUNT; i++) {
 			UnloadSound(data->sounds.sounds[i]);
@@ -548,19 +542,20 @@ int main(void) {
 	Font fonts[FONT_SIZE];
 	fonts[FONT_ID_DEFAULT] = GetFontDefault();
 
-	fonts[FONT_ID_64_PX] = LoadFontEx("resources/fonts/Roboto-Regular.ttf", 64 * 3, NULL, 0);
+	#define FONT_LOC "resources/fonts/Roboto-Regular.ttf"
+	fonts[FONT_ID_64_PX] = LoadFontEx(FONT_LOC, 64 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_64_PX].texture, TEXTURE_FILTER_BILINEAR);
 
-	fonts[FONT_ID_32_PX] = LoadFontEx("resources/fonts/Roboto-Regular.ttf", 32 * 3, NULL, 0);
+	fonts[FONT_ID_32_PX] = LoadFontEx(FONT_LOC, 32 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_32_PX].texture, TEXTURE_FILTER_BILINEAR);
 
-	fonts[FONT_ID_24_PX] = LoadFontEx("resources/fonts/Roboto-Regular.ttf", 24 * 3, NULL, 0);
+	fonts[FONT_ID_24_PX] = LoadFontEx(FONT_LOC, 24 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_24_PX].texture, TEXTURE_FILTER_BILINEAR);
 
-	fonts[FONT_ID_16_PX] = LoadFontEx("resources/fonts/Roboto-Regular.ttf", 16 * 3, NULL, 0);
+	fonts[FONT_ID_16_PX] = LoadFontEx(FONT_LOC, 16 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_16_PX].texture, TEXTURE_FILTER_BILINEAR);
 
-	fonts[FONT_ID_12_PX] = LoadFontEx("resources/fonts/Roboto-Regular.ttf", 12 * 3, NULL, 0);
+	fonts[FONT_ID_12_PX] = LoadFontEx(FONT_LOC, 12 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_12_PX].texture, TEXTURE_FILTER_BILINEAR);
 
 	for (int i = 0; i < FONT_SIZE; i++) {
@@ -675,11 +670,15 @@ int main(void) {
 	}
 
 	for (int i = 0; i < FONT_SIZE; i++) {
-		UnloadFont(fonts[i]);
+		if (IsFontValid(fonts[i])) {
+			UnloadFont(fonts[i]);
+		}
 	}
 
 	clean_data(&pomo_data);
-	UnloadImage(appIcon);
+	if (IsImageValid(appIcon)) {
+		UnloadImage(appIcon);
+	}
 	CloseAudioDevice();
 	Clay_Raylib_Close();
 	return 0;
@@ -933,68 +932,60 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 }
 
 static int handle_String_edits(struct String *selectedString, Options* options) {
-	// -1: Error
-	// 0: Nothing
-	// 1: Pressed Enter
-	// 2: Revert Back
-	// 3: Tab
 	if (selectedString == NULL) return -1;
 	static float keyTimer = 0.0f;
 	static int lastKeyPressed = 0;
+	static char lastCharPressed = '\0';
 
-	// Repeat Chars
-	if (IsKeyDown(lastKeyPressed)) {
+	// handle char input
+	int character = GetCharPressed();
+	while (character > 0) {
+		if (character >= 32 && character <= 125) {
+			Add_Char_To_String(selectedString, (char)character);
+			lastCharPressed = (char)character;
+			lastKeyPressed = 0;  // Reset key repeat when typing a character
+			keyTimer = 0.0f;
+		}
+		character = GetCharPressed();
+	}
+
+	// handle action keys
+	int key = GetKeyPressed();
+	while (key > 0) {
+		lastKeyPressed = key;
+		keyTimer = 0.0f;
+		lastCharPressed = '\0';  // Reset char when pressing action keys
+		switch (key) {
+			case KEY_ENTER:
+			return 1;
+			case KEY_ESCAPE:
+			return 2;
+			case KEY_TAB:
+			return 3;
+			case KEY_BACKSPACE:
+			Remove_Char_From_String(selectedString);
+			break;
+		}
+		key = GetKeyPressed();
+	}
+
+	// key repeat logic
+	if (lastKeyPressed > 0 && IsKeyDown(lastKeyPressed)) {
 		keyTimer += GetFrameTime();
-		if (keyTimer >= options->REPEAT_DELAY){
-			if (keyTimer >= (options->REPEAT_DELAY + options->REPEAT_INTERVAL)) {
-				switch (lastKeyPressed) {
-					case KEY_BACKSPACE: {
-						Remove_Char_From_String(selectedString);
-						break;
-					}
-
-					default: {
-						if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-							Add_Char_To_String(selectedString, GetCharPressed());
-						}
-						break;
-					}
-				}
-				keyTimer = options->REPEAT_DELAY;
+		if (keyTimer >= (options->REPEAT_DELAY + options->REPEAT_INTERVAL)) {
+			if (lastKeyPressed == KEY_BACKSPACE) {
+				Remove_Char_From_String(selectedString);
+			} else if (lastCharPressed != '\0') {
+				Add_Char_To_String(selectedString, lastCharPressed);
 			}
+			keyTimer -= options->REPEAT_INTERVAL;  // Subtract instead of reset for smoother repeat
 		}
 	} else {
 		keyTimer = 0.0f;
+		lastKeyPressed = 0;
+		lastCharPressed = '\0';
 	}
 
-	lastKeyPressed = GetKeyPressed();
-	while(lastKeyPressed) {
-		switch (lastKeyPressed) {
-			case KEY_ENTER: return 1;
-			case KEY_ESCAPE: return 2;
-			case KEY_TAB: return 3;
-
-			case KEY_BACKSPACE: {
-				Remove_Char_From_String(selectedString);
-				break;
-			}
-
-			default: {
-				if (lastKeyPressed >= 32 && lastKeyPressed <= 125) {
-					Add_Char_To_String(selectedString, GetCharPressed());
-				}
-				break;
-			}
-		}
-
-		int temp = GetKeyPressed();
-		if (temp == 0) {
-			break;
-		} else {
-			lastKeyPressed = temp;
-			PRINT(lastKeyPressed);
-		}
-	}
 	return 0;
 }
 
@@ -1121,6 +1112,7 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 	// Key presses
 	HANDLE_EDITS_TO_TASK(data);
 
+	#ifdef DEBUG
 	if (data->tasks.isEditing == IS_NOT_EDITING) {
 		if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
 			if (IsKeyPressed(KEY_R)) {
@@ -1147,6 +1139,8 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 			}
 		}
 	}
+	#endif
+
 	if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) {
 		data->tasks.isDragging = false;
 	}
@@ -1264,6 +1258,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
 		data->appState += data->appState % 2 == 0? 1: -1;
+		// TODO: add time to total_focus time
 	}
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(Focus_ShortBreak_LongBreak))) {
@@ -1378,7 +1373,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 			.backgroundColor = data->appState % 2 == 0? data->colors[COLOR_BACKGROUND_MAIN_ACTIVE]: data->colors[COLOR_BACKGROUND_MAIN_INACTIVE]
 		}){
 			if (data->appState % 2 == 0) {
-				if (tasks.currentSelectedTask >= 0 && tasks.currentSelectedTask < tasks.tasks_count && data->appState == STATE_FOCUS && data->tasks.tasks[data->tasks.currentSelectedTask].__descDefined__) {
+				if (tasks.currentSelectedTask >= 0 && tasks.currentSelectedTask < tasks.tasks_count && data->appState == STATE_FOCUS && !data->tasks.tasks[data->tasks.currentSelectedTask].__completed__ && data->tasks.tasks[data->tasks.currentSelectedTask].__descDefined__) {
 					CLAY_AUTO_ID({
 						.clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() },
 						.layout = {
@@ -1470,7 +1465,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 			}) {
 				Clay_String ADD_TASK = { .chars = " +Task ", .isStaticallyAllocated = false};
 				ADD_TASK.length = strlen(ADD_TASK.chars);
-				RenderButton(ADD_TASK, COLOR_BACKGROUND_ACTIVE, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
+				RenderButton(ADD_TASK, COLOR_BACKGROUND_MAIN_ACTIVE, data->colors, FONT_ID_16_PX, getFontHelper(data, PARAGRAPH), getFontHelper(data, LETTER_SPACING));
 				if (Clay_PointerOver(Clay_GetElementId(ADD_TASK)) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 					Add_Task(&data->tasks, CreateNewTask("", 0, 0), data->options.selectedTaskOnTop);
 					data->tasks.isEditing = IS_EDITING_TASK_DESC;

@@ -2,13 +2,15 @@
 SHELL=/bin/bash
 
 CC = gcc
-CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address -O0
-CPPFLAGS += -DDEBUG
-# CPPFLAGS = -O3 -std=c99
-CPPFLAGS += -DAPP_TITLE="\"PomoFocus Timer"\" -DFILE_NAME="\"data.json"\"
+# CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address -O0
+# CPPFLAGS += -DDEBUG
 # CPPFLAGS += -Werror
 CFLAGS = -I./include
 LDFLAGS = -lGL -lm -lpthread -ldl -lrt -lX11 -lraylib -L./src/lib/
+
+
+CPPFLAGS = -std=c99 -O3 -march=native -flto=auto -ffunction-sections -fdata-sections -DAPP_TITLE="\"PomoFocus Timer"\"
+LDFLAGS += -flto=auto -Wl,--gc-sections
 
 SRC_DIRS := ./src
 FILES = $(wildcard $(SRC_DIRS)/*.c)
@@ -18,15 +20,6 @@ RESOURCES_DIR := resources
 TARGET_EXEC := app
 
 all: crun
-
-# windows: # I want exe to be available so that no such bullshit as compiling
-# 	echo "TODO"
-
-# debian: # I want .deb to be available so that no such bullshit as compiling
-# 	echo "TODO"
-
-# flatpak:
-# 	echo "TODO"
 
 debug: build/app
 	gdb $(BUILD_DIR)/$(TARGET_EXEC)
