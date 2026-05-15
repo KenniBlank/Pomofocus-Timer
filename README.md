@@ -5,6 +5,10 @@ A pomodoro timer made using:
 - [cJSON](https://github.com/DaveGamble/cJSON)
 - [CLAY](https://github.com/nicbarker/clay/)
 
+## ScreenShots:
+![Active](Design/App_Active.png)
+![Inactive](Design/App_Inactive.png)
+
 ## Attributions
 ### Audio
 - **Click Sound Effect**: [Universfield](https://pixabay.com/users/universfield-28281460/) via Pixabay.

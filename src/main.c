@@ -185,6 +185,32 @@ typedef struct {
 	SoundData sounds;
 } PomodoroData;
 
+#define JSON(obj, key) (cJSON_GetObjectItem((obj), (key)))
+
+#define JSON_INT(obj, key, field) do { \
+	cJSON *it = JSON(obj, key); \
+	if (it && cJSON_IsNumber(it)) \
+		(field) = it->valueint; \
+} while (0)
+
+#define JSON_DBL(obj, key, field) do { \
+	cJSON *it = JSON(obj, key); \
+	if (it && cJSON_IsNumber(it)) \
+		(field) = it->valuedouble; \
+} while (0)
+
+#define JSON_BOOL(obj, key, field) do { \
+	cJSON *it = JSON(obj, key); \
+	if (it) \
+		(field) = it->valueint; \
+} while (0)
+
+#define JSON_STR(obj, key, field) do { \
+	cJSON *it = JSON(obj, key); \
+	if (it && cJSON_IsString(it)) \
+		(field) = it->valuestring; \
+} while (0)
+
 static int LoadData(PomodoroData* data) {
 	// TODO: handle cases with default value for deleted data
 	FILE *file = fopen(FILE_NAME, "r");
@@ -202,25 +228,28 @@ static int LoadData(PomodoroData* data) {
 	cJSON *json = cJSON_Parse(buffer);
 
 	// Options
-	const cJSON *options = cJSON_GetObjectItem(json, "options");
-	data->options = (Options) {
-		.masterVolume = cJSON_GetObjectItem(options, "masterVolume")->valuedouble,
-		.focusCount = cJSON_GetObjectItem(options, "focusCount")->valueint,
-		.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = cJSON_GetObjectItem(options, "FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK")->valueint,
-		.REPEAT_DELAY = cJSON_GetObjectItem(options, "REPEAT_DELAY")->valuedouble,
-		.REPEAT_INTERVAL = cJSON_GetObjectItem(options, "REPEAT_INTERVAL")->valuedouble,
-		.SCROLL_MULTIPLIER = cJSON_GetObjectItem(options, "SCROLL_MULTIPLIER")->valuedouble,
-		.selectedTaskOnTop = cJSON_GetObjectItem(options, "selectedTaskOnTop")->valueint,
-		.onTaskSwitchResetTimer = cJSON_GetObjectItem(options, "onTaskSwitchResetTimer")->valueint,
-	};
-	cJSON *time_constants = cJSON_GetObjectItem(options, "time_constants");
-	cJSON *time_constant = NULL;
-	for (int index = 0;;) {
-		cJSON_ArrayForEach(time_constant, time_constants) {
-			data->options.time_constants[index] = time_constant->valueint;
-			index++;
+	if (cJSON_GetObjectItem(json, "options")) {
+		const cJSON *options = cJSON_GetObjectItem(json, "options");
+		data->options = (Options) {
+			.masterVolume = cJSON_GetObjectItem(options, "masterVolume")->valuedouble,
+			.focusCount = cJSON_GetObjectItem(options, "focusCount")->valueint,
+			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = cJSON_GetObjectItem(options, "FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK")->valueint,
+			.REPEAT_DELAY = cJSON_GetObjectItem(options, "REPEAT_DELAY")->valuedouble,
+			.REPEAT_INTERVAL = cJSON_GetObjectItem(options, "REPEAT_INTERVAL")->valuedouble,
+			.SCROLL_MULTIPLIER = cJSON_GetObjectItem(options, "SCROLL_MULTIPLIER")->valuedouble,
+			.selectedTaskOnTop = cJSON_GetObjectItem(options, "selectedTaskOnTop")->valueint,
+			.onTaskSwitchResetTimer = cJSON_GetObjectItem(options, "onTaskSwitchResetTimer")->valueint,
+		};
+
+		cJSON *time_constants = cJSON_GetObjectItem(options, "time_constants");
+		cJSON *time_constant = NULL;
+		for (int index = 0;;) {
+			cJSON_ArrayForEach(time_constant, time_constants) {
+				data->options.time_constants[index] = time_constant->valueint;
+				index++;
+			}
+			break;
 		}
-		break;
 	}
 
 	// Tasks:
