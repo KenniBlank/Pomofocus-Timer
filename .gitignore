@@ -1,3 +1,6 @@
-jsonTest
-build/
-.vscode
+build/*
+!build/
+!build/data.json
+!build/stats.json
+
+.vscode/

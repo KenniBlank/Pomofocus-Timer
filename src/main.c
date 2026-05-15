@@ -144,7 +144,7 @@ enum {
 
 typedef struct {
 	Sound* sounds;
-	int* count; // How many times to play sound!
+	int count[SOUND_COUNT]; // How many times to play sound!
 } SoundData;
 
 typedef enum {
@@ -443,8 +443,8 @@ void THEME_LIGHT(PomodoroData *data) {
 	data->colors[COLOR_BACKGROUND_SELECTED_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
 	data->colors[COLOR_BACKGROUND_TASK] = data->colors[COLOR_BACKGROUND_INACTIVE];
 
-	data->colors[COLOR_BACKGROUND_FSL_BUTTON] = (Clay_Color) {.r = 240, .g = 240, .b = 240, .a = 255};
-	data->colors[COLOR_BACKGROUND_FSL_BUTTON_SELECTED] = data->colors[COLOR_BACKGROUND_ACTIVE];
+	data->colors[COLOR_BACKGROUND_FSL_BUTTON] = data->colors[COLOR_BACKGROUND_ACTIVE];
+	data->colors[COLOR_BACKGROUND_FSL_BUTTON_SELECTED] = data->colors[COLOR_BACKGROUND_INACTIVE];
 
 	data->colors[COLOR_BACKGROUND_SS_BUTTON] = (Clay_Color) {.r = 255, .g = 249, .b = 219, .a = 255};
 	data->colors[COLOR_BACKGROUND_SS_BUTTON_SELECTED] = (Clay_Color) {.r = 250, .g = 82, .b = 82, .a = 255};
@@ -486,15 +486,14 @@ int initialize_data(PomodoroData* data) {
 	data->options.time_constants[FOCUS_TIMER] = 25 * 60;
 	data->options.time_constants[LONG_BREAK_TIMER] = 15 * 60;
 	data->options.time_constants[SHORT_BREAK_TIMER] = 5 * 60;
-	data->timerConstraints.timer = data->options.time_constants[data->appState];
+
+	data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 
 	// Colors Definitions:
 	THEME_LIGHT(data);
 
 	data->sounds.sounds = malloc(sizeof(Sound) * SOUND_COUNT);
 	if (data->sounds.sounds == NULL) return 1;
-	data->sounds.count = malloc(sizeof(int) * SOUND_COUNT);
-	if (data->sounds.count == NULL) return 1;
 	data->sounds.sounds[SOUND_CLICK] = LoadSound("resources/sounds/mouseClick.wav");
 	data->sounds.count[SOUND_CLICK] = 1;
 	data->sounds.sounds[SOUND_FOCUS] = LoadSound("resources/sounds/focus.wav");
@@ -516,10 +515,6 @@ void clean_data(PomodoroData* data) {
 		}
 		free(data->sounds.sounds);
 		data->sounds.sounds = NULL;
-	}
-	if (data->sounds.count) {
-		free(data->sounds.count);
-		data->sounds.count = NULL;
 	}
 }
 
