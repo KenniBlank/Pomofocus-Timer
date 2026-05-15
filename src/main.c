@@ -1,13 +1,3 @@
-// MVP is done!
-// One last time I will record for stats and then
-// But this is it for the video!
-// TODOs:
-// - [~] Save and Load System: Next!!
-// - [~] Modifing Task Desc, Count, Expected
-	// - [ ] Add repeating keys option + CTRL + A to select all +
-	// - [ ] Add keys left-right edit option to task
-// - [ ] On timer going off, send notification, and a signal to system
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -1253,7 +1243,6 @@ void Device_Smart_Watch(PomodoroData* data) {
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
 		data->appState += data->appState % 2 == 0? 1: -1;
-		// TODO: add time to total_focus time
 	}
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(Focus_ShortBreak_LongBreak))) {

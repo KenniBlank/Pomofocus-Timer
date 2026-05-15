@@ -32,7 +32,6 @@ Task CreateNewTask(const char *str_literal, int count, int expected) {
 		.id = __ID__
 	};
 
-	// TODO: error handling
 	snprintf(newTask.desc.chars, STR_BUFFER_CAPACITY, "%s", str_literal);
 	newTask.desc.length = strlen(newTask.desc.chars);
 	newTask.__descDefined__ = newTask.desc.length > 0;
@@ -103,12 +102,9 @@ void Select_Task(Tasks *tasks, int index, bool rearrange) {
 }
 
 int Add_Focus_Count_To_Task(Task *task) {
-	// TODO: case handling in case the task's expected string is not long enough
 	task->count++;
 	snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 	task->count_expected.length = strlen(task->count_expected.chars);
-
-	// TODO Maybe: if (task->count == task->expected) task->completed = true;
 	return 0;
 }
 
