@@ -125,3 +125,78 @@ void Clean_Tasks(Tasks *task_arr) {
 		task_arr->tasks = NULL;
 	}
 }
+
+void extract_tasks_MD_FORMAT(Tasks* taskArr, const char *file_txt_all) {
+	const char *ptr = file_txt_all;
+
+	while (*ptr != '\0') {
+		struct Task task = {0};
+		char line[STR_BUFFER_CAPACITY * 2];
+		int line_i = 0;
+
+		// Read one line
+		while (*ptr != '\n' && *ptr != '\0' && line_i < sizeof(line) - 1) line[line_i++] = *ptr++;
+		line[line_i] = '\0';
+		if (*ptr == '\n') ptr++;
+		if (line[0] == '\0') continue;
+
+		// Expected formats:
+		// - [ ] Buy milk
+		// - [x] Finish assignment
+		// - [ ] "Pushups" 50
+		// - [x] "Coding Hours" 4 8
+
+		char check;
+		char desc[STR_BUFFER_CAPACITY] = {0};
+		int matched;
+		int a = 0;
+		int b = 0;
+
+		// Case:
+		// - [x] "Task" 4 8
+		matched = sscanf(line, "- [%c] \"%255[^\"]\" %d %d", &check, desc, &a, &b);
+		if (matched == 4) {
+			task.__completed__ = (check == 'x' || check == 'X');
+			task.count = a;
+			task.expected = b;
+			task.__countExpectedDefined__ = true;
+			snprintf(task.count_expected.chars, STR_BUFFER_CAPACITY, "%d/%d", a, b);
+			task.count_expected.length = strlen(task.count_expected.chars);
+
+			snprintf(task.desc.chars, STR_BUFFER_CAPACITY, "%s", desc);
+			task.desc.length = strlen(task.desc.chars);
+			task.__descDefined__ = true;
+			Add_Task(taskArr, task, true);
+			continue;
+		}
+
+		// Case:
+		// - [x] "Task" 50
+		matched = sscanf(line, "- [%c] \"%255[^\"]\" %d", &check, desc, &a);
+		if (matched == 3) {
+			task.__completed__ = (check == 'x' || check == 'X');
+			task.expected = a;
+			task.__countExpectedDefined__ = true;
+			snprintf(task.count_expected.chars, STR_BUFFER_CAPACITY, "%d", a);
+			task.count_expected.length = strlen(task.count_expected.chars);
+
+			snprintf(task.desc.chars, STR_BUFFER_CAPACITY, "%s", desc);
+			task.desc.length = strlen(task.desc.chars);
+			task.__descDefined__ = true;
+			Add_Task(taskArr, task, true);
+			continue;
+		}
+
+		// Case:
+		// - [x] Buy milk
+		matched = sscanf(line, "- [%c] %255[^\n]", &check, desc);
+		if (matched == 2) {
+			task.__completed__ = (check == 'x' || check == 'X');
+			snprintf(task.desc.chars, STR_BUFFER_CAPACITY, "%s", desc);
+			task.desc.length = strlen(task.desc.chars);
+			task.__descDefined__ = true;
+			Add_Task(taskArr, task, true);
+			continue;
+		}
+	}
+}

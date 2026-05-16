@@ -43,6 +43,7 @@
 #endif
 
 #define FILE_NAME "data.json"
+#define TASKS_LIST "data.json"
 #define APP_ICON_LOC "./resources/appIcon-32.png"
 
 #ifndef DEBUG
@@ -155,6 +156,8 @@ typedef enum {
 
 typedef struct {
 	float timer;
+	float savedTime;
+
 	struct String timerStr;
 } TimerConstraints;
 
@@ -185,34 +188,47 @@ typedef struct {
 	SoundData sounds;
 } PomodoroData;
 
-#define JSON(obj, key) (cJSON_GetObjectItem((obj), (key)))
+void ResetTimer(PomodoroData* pomo_data);
+void Start_Stop_Pressed(PomodoroData* pomo_data);
 
+static void HANDLE_EVENTS(uint32_t*, Clay_Arena*, PomodoroData* );
+static Clay_RenderCommandArray ClayCreateLayout(PomodoroData*);
+
+#define JSON(obj, key) ((obj) != NULL && cJSON_HasObjectItem((obj), (key)) ? cJSON_GetObjectItem((obj), (key)) : NULL)
 #define JSON_INT(obj, key, field) do { \
 	cJSON *it = JSON(obj, key); \
-	if (it && cJSON_IsNumber(it)) \
+	if (it == NULL) { \
+		fprintf(stderr, "Warning: Missing required field '%s'\n", (key)); \
+	} else if (!cJSON_IsNumber(it)) { \
+		fprintf(stderr, "Warning: Field '%s' is not a number (got type %d)\n", (key), it->type); \
+	} else { \
 		(field) = it->valueint; \
+	} \
 } while (0)
 
 #define JSON_DBL(obj, key, field) do { \
 	cJSON *it = JSON(obj, key); \
-	if (it && cJSON_IsNumber(it)) \
+	if (it == NULL) { \
+		fprintf(stderr, "Warning: Missing required field '%s'\n", (key)); \
+	} else if (!cJSON_IsNumber(it)) { \
+		fprintf(stderr, "Warning: Field '%s' is not a number (got type %d)\n", (key), it->type); \
+	} else { \
 		(field) = it->valuedouble; \
-} while (0)
-
-#define JSON_BOOL(obj, key, field) do { \
-	cJSON *it = JSON(obj, key); \
-	if (it) \
-		(field) = it->valueint; \
+	} \
 } while (0)
 
 #define JSON_STR(obj, key, field) do { \
 	cJSON *it = JSON(obj, key); \
-	if (it && cJSON_IsString(it)) \
+	if (it == NULL) { \
+		fprintf(stderr, "Warning: Missing required field '%s'\n", (key)); \
+	} else if (!cJSON_IsString(it)) { \
+		fprintf(stderr, "Warning: Field '%s' is not a string (got type %d)\n", (key), it->type); \
+	} else { \
 		(field) = it->valuestring; \
+	} \
 } while (0)
 
 static int LoadData(PomodoroData* data) {
-	// TODO: handle cases with default value for deleted data
 	FILE *file = fopen(FILE_NAME, "r");
 	if (file == NULL) {
 		return 1; // Todo: handle Error
@@ -222,82 +238,111 @@ static int LoadData(PomodoroData* data) {
 	long fileSize = ftell(file);
 	fseek(file, 0, SEEK_SET);
 	char *buffer = (char *) malloc(fileSize + 1);
+	if (buffer == NULL) {
+		fclose(file);
+		return 1;
+	}
 	fread(buffer, sizeof(char), fileSize, file);
 	buffer[fileSize] = '\0';
 
 	cJSON *json = cJSON_Parse(buffer);
+	if (json == NULL) {
+		free(buffer);
+		fclose(file);
+		return 1;
+	}
 
 	// Options
-	if (cJSON_GetObjectItem(json, "options")) {
-		const cJSON *options = cJSON_GetObjectItem(json, "options");
-		data->options = (Options) {
-			.masterVolume = cJSON_GetObjectItem(options, "masterVolume")->valuedouble,
-			.focusCount = cJSON_GetObjectItem(options, "focusCount")->valueint,
-			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = cJSON_GetObjectItem(options, "FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK")->valueint,
-			.REPEAT_DELAY = cJSON_GetObjectItem(options, "REPEAT_DELAY")->valuedouble,
-			.REPEAT_INTERVAL = cJSON_GetObjectItem(options, "REPEAT_INTERVAL")->valuedouble,
-			.SCROLL_MULTIPLIER = cJSON_GetObjectItem(options, "SCROLL_MULTIPLIER")->valuedouble,
-			.selectedTaskOnTop = cJSON_GetObjectItem(options, "selectedTaskOnTop")->valueint,
-			.onTaskSwitchResetTimer = cJSON_GetObjectItem(options, "onTaskSwitchResetTimer")->valueint,
-		};
+	cJSON *options = JSON(json, "options");
+	if (options != NULL) {
+		JSON_DBL(options, "masterVolume", data->options.masterVolume);
+		JSON_INT(options, "focusCount", data->options.focusCount);
+		JSON_INT(options, "FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK", data->options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK);
+		JSON_DBL(options, "REPEAT_DELAY", data->options.REPEAT_DELAY);
+		JSON_DBL(options, "REPEAT_INTERVAL", data->options.REPEAT_INTERVAL);
+		JSON_DBL(options, "SCROLL_MULTIPLIER", data->options.SCROLL_MULTIPLIER);
+		JSON_INT(options, "selectedTaskOnTop", data->options.selectedTaskOnTop);
+		JSON_INT(options, "onTaskSwitchResetTimer", data->options.onTaskSwitchResetTimer);
 
-		cJSON *time_constants = cJSON_GetObjectItem(options, "time_constants");
-		cJSON *time_constant = NULL;
-		for (int index = 0;;) {
+		cJSON *time_constants = JSON(options, "time_constants");
+		if (time_constants != NULL) {
+			cJSON *time_constant = NULL;
+			int index = 0;
 			cJSON_ArrayForEach(time_constant, time_constants) {
-				data->options.time_constants[index] = time_constant->valueint;
-				index++;
+				if (cJSON_IsNumber(time_constant)) {
+					data->options.time_constants[index++] = time_constant->valueint;
+				}
 			}
-			break;
 		}
 	}
 
 	// Tasks:
-	const cJSON *tasks = cJSON_GetObjectItem(json, "tasks");
-	const cJSON *tasks_arr = cJSON_GetObjectItem(tasks, "tasks");
-	const cJSON *task = NULL;
-	data->tasks.currentSelectedTask = cJSON_GetObjectItem(tasks, "currentSelectedTask")->valueint;
-	cJSON_ArrayForEach(task, tasks_arr) {
-		int count = cJSON_GetObjectItem(task, "count")->valueint;
-		int expected = cJSON_GetObjectItem(task, "expected")->valueint;
+	cJSON *tasks = JSON(json, "tasks");
+	if (tasks != NULL) {
+		JSON_INT(tasks, "currentSelectedTask", data->tasks.currentSelectedTask);
 
-		bool __completed__ = cJSON_GetObjectItem(task, "__completed__")->valueint;
-		bool __descDefined__ = cJSON_GetObjectItem(task, "__descDefined__")->valueint;
+		cJSON *tasks_arr = JSON(tasks, "tasks");
+		if (tasks_arr != NULL) {
+			cJSON *task = NULL;
+			cJSON_ArrayForEach(task, tasks_arr) {
+				int count = 0;
+				int expected = 0;
+				int completed_val = 0;
+				int descDefined_val = 0;
 
-		if (__descDefined__) {
-			char *desc = cJSON_GetObjectItem(task, "desc")->valuestring;
-			Add_Task(&data->tasks, CreateNewTask(desc, count, expected), data->options.selectedTaskOnTop);
-		} else {
-			if (count || expected) {
-				Add_Task(&data->tasks, CreateNewTask("", count, expected), data->options.selectedTaskOnTop);
+				JSON_INT(task, "count", count);
+				JSON_INT(task, "expected", expected);
+				JSON_INT(task, "__completed__", completed_val);
+				JSON_INT(task, "__descDefined__", descDefined_val);
+
+				bool __completed__ = (bool)completed_val;
+				bool __descDefined__ = (bool)descDefined_val;
+
+				if (__descDefined__) {
+					char *desc = NULL;
+					JSON_STR(task, "desc", desc);
+					if (desc != NULL) {
+						Add_Task(&data->tasks, CreateNewTask(desc, count, expected), data->options.selectedTaskOnTop);
+					}
+				} else {
+					if (count || expected) {
+						Add_Task(&data->tasks, CreateNewTask("", count, expected), data->options.selectedTaskOnTop);
+					}
+				}
+				data->tasks.tasks[data->tasks.currentSelectedTask].__completed__ = __completed__;
 			}
 		}
-		data->tasks.tasks[data->tasks.currentSelectedTask].__completed__ = __completed__;
 	}
 
 	// AppState
-	data->appState = cJSON_GetObjectItem(json, "appState")->valueint;
-	data->appState += data->appState % 2 == 0? 1: 0;
+	int app_state_val = 0;
+	JSON_INT(json, "appState", app_state_val);
+	data->appState = app_state_val;
+	data->appState += data->appState % 2 == 0 ? 1 : 0;
 
 	// TimerConstraints
-	cJSON *timerConstraints = cJSON_GetObjectItem(json, "timerConstraints");
-	data->timerConstraints.timer = cJSON_GetObjectItem(timerConstraints, "timer")->valuedouble;
+	cJSON *timerConstraints = JSON(json, "timerConstraints");
+	if (timerConstraints != NULL) {
+		JSON_DBL(timerConstraints, "timer", data->timerConstraints.timer);
+		JSON_DBL(timerConstraints, "savedTime", data->timerConstraints.savedTime);
+	}
 
 	// __DEVICE_DIMENSION__
-	cJSON *__DEVICE_DIMENSION__ = cJSON_GetObjectItem(json, "__DEVICE_DIMENSION__");
-	cJSON *x = cJSON_GetObjectItem(__DEVICE_DIMENSION__, "x");
-	cJSON *y = cJSON_GetObjectItem(__DEVICE_DIMENSION__, "y");
-	data->__DEVICE_DIMENSION__.x = x->valueint;
-	data->__DEVICE_DIMENSION__.y = y->valueint;
+	cJSON *__DEVICE_DIMENSION__ = JSON(json, "__DEVICE_DIMENSION__");
+	if (__DEVICE_DIMENSION__ != NULL) {
+		JSON_INT(__DEVICE_DIMENSION__, "x", data->__DEVICE_DIMENSION__.x);
+		JSON_INT(__DEVICE_DIMENSION__, "y", data->__DEVICE_DIMENSION__.y);
+	}
 
 	// Stats
-	if (cJSON_HasObjectItem(json, "stat_today")) {
-		cJSON *stat_today = cJSON_GetObjectItem(json, "stat_today");
-
-		if (strcmp(data->stat_today.key, cJSON_GetObjectItem(stat_today, "key")->valuestring) == 0) {
-			strcpy(data->stat_today.key, cJSON_GetObjectItem(stat_today, "key")->valuestring);
-			data->stat_today.focusTime = cJSON_GetObjectItem(stat_today, "focusTime")->valueint;
-			data->stat_today.breakTime = cJSON_GetObjectItem(stat_today, "breakTime")->valueint;
+	cJSON *stat_today = JSON(json, "stat_today");
+	if (stat_today != NULL) {
+		char *key_str = NULL;
+		JSON_STR(stat_today, "key", key_str);
+		if (key_str != NULL && strcmp(data->stat_today.key, key_str) == 0) {
+			strcpy(data->stat_today.key, key_str);
+			JSON_INT(stat_today, "focusTime", data->stat_today.focusTime);
+			JSON_INT(stat_today, "breakTime", data->stat_today.breakTime);
 		} else {
 			Save_Stat(data->stat_today);
 		}
@@ -396,6 +441,9 @@ static int SaveData(PomodoroData* data) {
 	cJSON *timer = cJSON_CreateNumber(time_constraints->timer);
 	cJSON_AddItemToObject(timerConstraints, "timer", timer);
 
+	cJSON *savedTime = cJSON_CreateNumber(time_constraints->savedTime);
+	cJSON_AddItemToObject(timerConstraints, "savedTime", savedTime);
+
 	// __DEVICE_DIMENSION__
 	Vector2 *_DEVICE_DIMENSION_ = &data->__DEVICE_DIMENSION__;
 	cJSON *__DEVICE_DIMENSION__ = cJSON_CreateObject();
@@ -425,8 +473,6 @@ static int SaveData(PomodoroData* data) {
 	return 0;
 }
 
-static void HANDLE_EVENTS(uint32_t*, Clay_Arena*, PomodoroData* );
-static Clay_RenderCommandArray ClayCreateLayout(PomodoroData*);
 static void HandleClayErrors(Clay_ErrorData errorData) {
 	PRINT_S(errorData.errorText.chars);
 
@@ -474,7 +520,7 @@ void THEME_LIGHT(PomodoroData *data) {
 
 int initialize_data(PomodoroData* data) {
 	// Global Data
-	g_UI_SCALE = 1.0f;
+	g_UI_SCALE = 2.0f;
 	g_reinit_clay = false;
 	g_task_index = true;
 	g_playSound = false;
@@ -507,6 +553,7 @@ int initialize_data(PomodoroData* data) {
 	data->options.time_constants[SHORT_BREAK_TIMER] = 5 * 60;
 
 	data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
+	data->timerConstraints.savedTime = 0.0f;
 
 	// Colors Definitions:
 	THEME_LIGHT(data);
@@ -604,11 +651,13 @@ int main(void) {
 					if (pomo_data.tasks.tasks_count > 0) {
 						Add_Focus_Count_To_Task(&pomo_data.tasks.tasks[pomo_data.tasks.currentSelectedTask]);
 					}
-					pomo_data.stat_today.focusTime += pomo_data.options.time_constants[FOCUS_TIMER];
-					Notify(APP_TITLE, "Time for break", APP_ICON_LOC, 5);
+					Notify(APP_TITLE, "Time for break", APP_ICON_LOC, 3);
+
+					pomo_data.stat_today.focusTime += pomo_data.options.time_constants[FOCUS_TIMER] - pomo_data.timerConstraints.savedTime;
 				} else {
-					Notify(APP_TITLE, "Time to Focus", APP_ICON_LOC, 5);
-					pomo_data.stat_today.breakTime += pomo_data.options.time_constants[pomo_data.appState >> 1];
+					Notify(APP_TITLE, "Time to Focus", APP_ICON_LOC, 6);
+
+					pomo_data.stat_today.breakTime += pomo_data.options.time_constants[pomo_data.appState >> 1] - pomo_data.timerConstraints.savedTime;
 				}
 
 				if (pomo_data.options.focusCount >= pomo_data.options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK) {
@@ -618,6 +667,7 @@ int main(void) {
 					pomo_data.appState = pomo_data.appState == STATE_FOCUS? STATE_SHORT_BREAK_PAUSED: STATE_FOCUS_PAUSED;
 				}
 				pomo_data.timerConstraints.timer = pomo_data.options.time_constants[pomo_data.appState >> 1];
+				pomo_data.timerConstraints.savedTime = 0.0f;
 
 				g_playSound = true;
 				playSoundCount = 0;
@@ -628,14 +678,7 @@ int main(void) {
 
 		// On space, start/stop switch and stop any sound playing iff pressed:
 		if (IsKeyPressed(KEY_SPACE) && !pomo_data.tasks.isEditing) {
-			pomo_data.appState += pomo_data.appState % 2 == 0? 1: -1;
-			g_playSound = false;
-			for (int i = 0; i < SOUND_COUNT; i++) {
-				if (IsSoundPlaying(pomo_data.sounds.sounds[i])) {
-					StopSound(pomo_data.sounds.sounds[i]);
-				}
-			}
-			PlaySound(pomo_data.sounds.sounds[SOUND_CLICK]);
+			Start_Stop_Pressed(&pomo_data);
 		}
 
 		if (g_playSound) {
@@ -796,7 +839,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 		if (Clay_Hovered()) {
 			if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
 				if (data->options.onTaskSwitchResetTimer && !(data->tasks.currentSelectedTask == taskIndex)) {
-					data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
+					ResetTimer(data);
 				}
 				if (taskIndex != data->tasks.currentSelectedTask) {
 					Select_Task(&data->tasks, taskIndex, data->options.selectedTaskOnTop);
@@ -1203,7 +1246,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 				.y = CLAY_ALIGN_Y_CENTER
 			},
 		},
-		.backgroundColor = data->colors[data->appState % 2 == 0? COLOR_BACKGROUND_ACTIVE: COLOR_BACKGROUND_INACTIVE],
+		.backgroundColor = data->colors[data->appState % 2 == 0? COLOR_BACKGROUND_MAIN_ACTIVE: COLOR_BACKGROUND_MAIN_INACTIVE],
 	}) {
 		CLAY(CLAY_ID("Smart Watch"), {
 			.layout  = {
@@ -1216,7 +1259,6 @@ void Device_Smart_Watch(PomodoroData* data) {
 		}) {
 			if (data->appState % 2 == 1) {
 				RenderButton(Focus_ShortBreak_LongBreak, COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_12_PX, FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
-				// TODO: add settings
 			}
 
 			CLAY_AUTO_ID({
@@ -1271,7 +1313,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 	}
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
-		data->appState += data->appState % 2 == 0? 1: -1;
+		Start_Stop_Pressed(data);
 	}
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(Focus_ShortBreak_LongBreak))) {
@@ -1538,16 +1580,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 	}
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
-		data->appState += data->appState % 2 == 0? 1: -1;
-		PlaySound(data->sounds.sounds[SOUND_CLICK]);
-
-		g_playSound = false;
-		for (int i = 0; i < SOUND_COUNT; i++) {
-			if (IsSoundPlaying(data->sounds.sounds[i])) {
-				StopSound(data->sounds.sounds[i]);
-			}
-		}
-		PlaySound(data->sounds.sounds[SOUND_CLICK]);
+		Start_Stop_Pressed(data);
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Focus))) {
 		if (data->appState != STATE_FOCUS && data->appState != STATE_FOCUS_PAUSED) {
 			data->appState = STATE_FOCUS_PAUSED;
@@ -1589,4 +1622,33 @@ static Clay_RenderCommandArray ClayCreateLayout(PomodoroData* data) {
 		}
 	}
 	return Clay_EndLayout(GetFrameTime());
+}
+
+void ResetTimer(PomodoroData* data) {
+	data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
+}
+
+void Start_Stop_Pressed(PomodoroData* pomo_data) {
+	// Save Time focus/break rn
+	if (pomo_data->appState % 2 == 0) {
+		double initial_constant = pomo_data->options.time_constants[pomo_data->appState >> 1];
+		double delta = (initial_constant - pomo_data->timerConstraints.timer) - pomo_data->timerConstraints.savedTime;
+		if (delta > 0) {
+			if ((pomo_data->appState >> 1) == 0) {
+				pomo_data->stat_today.focusTime += (int)delta;
+			} else {
+				pomo_data->stat_today.breakTime += (int)delta;
+			}
+			pomo_data->timerConstraints.savedTime += delta;
+		}
+	}
+
+	pomo_data->appState += pomo_data->appState % 2 == 0? 1: -1;
+	g_playSound = false;
+	for (int i = 0; i < SOUND_COUNT; i++) {
+		if (IsSoundPlaying(pomo_data->sounds.sounds[i])) {
+			StopSound(pomo_data->sounds.sounds[i]);
+		}
+	}
+	PlaySound(pomo_data->sounds.sounds[SOUND_CLICK]);
 }
