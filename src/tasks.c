@@ -130,12 +130,14 @@ void extract_tasks_MD_FORMAT(Tasks* taskArr, const char *file_txt_all) {
 	const char *ptr = file_txt_all;
 
 	while (*ptr != '\0') {
+		const int __LINE_SIZE__ = STR_BUFFER_CAPACITY * 2;
+
 		struct Task task = {0};
-		char line[STR_BUFFER_CAPACITY * 2];
-		int line_i = 0;
+		char line[__LINE_SIZE__];
+		size_t line_i = 0;
 
 		// Read one line
-		while (*ptr != '\n' && *ptr != '\0' && line_i < sizeof(line) - 1) line[line_i++] = *ptr++;
+		while (*ptr != '\n' && *ptr != '\0' && line_i < (__LINE_SIZE__) - 1) line[line_i++] = *ptr++;
 		line[line_i] = '\0';
 		if (*ptr == '\n') ptr++;
 		if (line[0] == '\0') continue;

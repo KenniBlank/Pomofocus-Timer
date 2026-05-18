@@ -1,6 +1,8 @@
 #include "raylib.h"
+#include "clay.h"
 #include "raymath.h"
 #include "stdint.h"
+#include "math.h"
 #include "string.h"
 #include "stdio.h"
 #include "stdlib.h"

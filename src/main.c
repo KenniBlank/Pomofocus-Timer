@@ -47,8 +47,8 @@
 #define APP_ICON_LOC "./resources/appIcon-32.png"
 
 #ifndef DEBUG
-	#define PRINT(variable) 0
-	#define PRINT_S(variable) 0
+	#define PRINT(variable) ((void*)0)
+	#define PRINT_S(variable) ((void*)0)
 #else
 	#define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout);
 	#define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
@@ -69,6 +69,12 @@
 #define BUTTON_PADDING (6 * 4)
 #define BORDER_WIDTH (5)
 
+enum {
+	TASK_COMPLETED,
+	TASK_INCOMPLETE,
+	TASK_EDITING
+};
+
 // GLOBAL variables
 bool g_reinit_clay;
 float g_UI_SCALE;
@@ -77,9 +83,7 @@ bool g_playSound;
 
 enum {
 	FONT_ID_DEFAULT,
-	FONT_ID_12_PX,
 	FONT_ID_16_PX,
-	FONT_ID_24_PX,
 	FONT_ID_32_PX,
 	FONT_ID_64_PX,
 	FONT_SIZE
@@ -531,10 +535,10 @@ int initialize_data(PomodoroData* data) {
 		.baseDeviceDimensions = { .x = DEVICE_SMART_PHONE_W * g_UI_SCALE, .y = (DEVICE_SMART_PHONE_W * 1.5f) * g_UI_SCALE },
 		.__DEVICE_DIMENSION__ = { .x = DEVICE_SMART_PHONE_W * g_UI_SCALE, .y = (DEVICE_SMART_PHONE_W * 1.5f) * g_UI_SCALE },
 		.options = {
-			.masterVolume = 0.2f,
+			.masterVolume = 1.0f,
 			.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = 4,
 			.focusCount = 0,
-			.REPEAT_DELAY = 0.30f,
+			.REPEAT_DELAY = 0.20f,
 			.REPEAT_INTERVAL = 0.06f,
 			.SCROLL_MULTIPLIER = 10.0f,
 			.selectedTaskOnTop = true,
@@ -603,21 +607,17 @@ int main(void) {
 	Font fonts[FONT_SIZE];
 	fonts[FONT_ID_DEFAULT] = GetFontDefault();
 
-	#define FONT_LOC "resources/fonts/Roboto-Regular.ttf"
-	fonts[FONT_ID_64_PX] = LoadFontEx(FONT_LOC, 64 * 3, NULL, 0);
+	#define FONT_LOC "resources/fonts/RobotoMono-Regular.ttf"
+	#define FONT_LOC2 "resources/fonts/Roboto-Regular.ttf"
+
+	fonts[FONT_ID_64_PX] = LoadFontEx(FONT_LOC2, 64 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_64_PX].texture, TEXTURE_FILTER_BILINEAR);
 
 	fonts[FONT_ID_32_PX] = LoadFontEx(FONT_LOC, 32 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_32_PX].texture, TEXTURE_FILTER_BILINEAR);
 
-	fonts[FONT_ID_24_PX] = LoadFontEx(FONT_LOC, 24 * 3, NULL, 0);
-	SetTextureFilter(fonts[FONT_ID_24_PX].texture, TEXTURE_FILTER_BILINEAR);
-
 	fonts[FONT_ID_16_PX] = LoadFontEx(FONT_LOC, 16 * 3, NULL, 0);
 	SetTextureFilter(fonts[FONT_ID_16_PX].texture, TEXTURE_FILTER_BILINEAR);
-
-	fonts[FONT_ID_12_PX] = LoadFontEx(FONT_LOC, 12 * 3, NULL, 0);
-	SetTextureFilter(fonts[FONT_ID_12_PX].texture, TEXTURE_FILTER_BILINEAR);
 
 	for (int i = 0; i < FONT_SIZE; i++) {
 		if (!IsFontValid(fonts[i])) {
@@ -626,14 +626,15 @@ int main(void) {
 		}
 	}
 
-	Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
-
-	SetTargetFPS(24);
-	SetExitKey(KEY_NULL);
 	Image appIcon = LoadImage(APP_ICON_LOC);
 	if (IsImageValid(appIcon)) {
 		SetWindowIcon(appIcon);
 	}
+
+	Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
+
+	SetTargetFPS(24);
+	SetExitKey(KEY_NULL);
 
 	// Sound
 	int playSoundCount = 0;
@@ -706,24 +707,56 @@ int main(void) {
 
 			float throughLineHeight = getFontHelper((&pomo_data), BORDER_WIDTH * 2);
 			throughLineHeight = (throughLineHeight > 1.0f) ? throughLineHeight: 1.0f;
-			for (int j = 0; j < renderCommands.length; j++) {
+			for (int32_t j = 0; j < renderCommands.length; j++) {
 				Clay_RenderCommand *renderCommand = Clay_RenderCommandArray_Get(&renderCommands, j);
-				if (renderCommand->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT && renderCommand->userData) {
-					Clay_BoundingBox tasks_bounding_box = Clay_GetElementData(Clay_GetElementId(CLAY_STRING("Tasks"))).boundingBox;
-					if (renderCommand->boundingBox.y + renderCommand->boundingBox.height <= tasks_bounding_box.y + 1.0f) continue;
-					if (renderCommand->boundingBox.y >= (tasks_bounding_box.y + tasks_bounding_box.height - 1.0f)) continue;
+				if (renderCommand->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT) {
+					if (renderCommand->userData == (void*) TASK_COMPLETED) {
+						Clay_BoundingBox tasks_bounding_box = Clay_GetElementData(Clay_GetElementId(CLAY_STRING("Tasks"))).boundingBox;
+						if (renderCommand->boundingBox.y + renderCommand->boundingBox.height <= tasks_bounding_box.y + 1.0f) continue;
+						if (renderCommand->boundingBox.y >= (tasks_bounding_box.y + tasks_bounding_box.height - 1.0f)) continue;
 
-					Clay_BoundingBox boundingBox = {renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height};
-					Clay_TextRenderData *textData = &renderCommand->renderData.text;
-					DrawRectangleRec((Rectangle) {
-						.x = boundingBox.x,
-						.y = boundingBox.y  + (boundingBox.height - throughLineHeight) / 2.0f,
-						.width = boundingBox.width,
-						.height = throughLineHeight,
-					}, CLAY_COLOR_TO_RAYLIB_COLOR(textData->textColor));
+						Clay_BoundingBox boundingBox = {renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height};
+						Clay_TextRenderData *textData = &renderCommand->renderData.text;
+						DrawRectangleRec((Rectangle) {
+							.x = boundingBox.x,
+							.y = boundingBox.y  + (boundingBox.height - throughLineHeight) / 2.0f,
+							.width = boundingBox.width,
+							.height = throughLineHeight,
+						}, CLAY_COLOR_TO_RAYLIB_COLOR(textData->textColor));
+					} else if (renderCommand->userData == (void*) TASK_EDITING) {
+						if (j + 1 < renderCommands.length) {
+							Clay_RenderCommand *nextCommand = Clay_RenderCommandArray_Get(&renderCommands, j + 1);
+							if (nextCommand->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT && nextCommand->userData == (void*)TASK_EDITING) {
+								continue;
+							}
+						}
+						Clay_BoundingBox tasks_bounding_box = Clay_GetElementData(Clay_GetElementId(CLAY_STRING("Tasks"))).boundingBox;
+						if (renderCommand->boundingBox.y + renderCommand->boundingBox.height <= tasks_bounding_box.y + 1.0f) continue;
+						if (renderCommand->boundingBox.y >= (tasks_bounding_box.y + tasks_bounding_box.height - 1.0f)) continue;
+
+						Clay_BoundingBox boundingBox = {renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height};
+
+						if (IsKeyDown(KEY_DELETE)) {
+							DrawRectangleRec((Rectangle){.x = boundingBox.x, .y = boundingBox.y, .height = boundingBox.height, .width = boundingBox.width}, MAGENTA);
+						}
+
+
+						Clay_TextRenderData *textData = &renderCommand->renderData.text;
+						if (((int)(GetTime() * 2.0) % 2) == 0) {
+							float cursorWidth = getFontHelper((&pomo_data), BORDER_WIDTH);
+							float cursorHeight = boundingBox.height * 0.8f;
+
+							DrawRectangleRec((Rectangle) {
+								.x = boundingBox.x + boundingBox.width,
+								.y = boundingBox.y + (boundingBox.height - cursorHeight) / 2.0f,
+								.width = cursorWidth,
+								.height = cursorHeight
+							}, CLAY_COLOR_TO_RAYLIB_COLOR(textData->textColor));
+						}
+					}
 				}
 			}
-		EndDrawing();
+			EndDrawing();
 	}
 
 	for (int i = 0; i < FONT_SIZE; i++) {
@@ -775,7 +808,7 @@ void RenderButton(Clay_String txt, int BG_COLOR, Clay_Color* colors_array, int F
 				.letterSpacing = letter_spacing,
 				.fontSize = (BG_COLOR != COLOR_BACKGROUND_FSL_BUTTON_SELECTED && flag) ? font_size * 1.04f: font_size,
 				.textColor = colors_array[COLOR_TXT],
-				.wrapMode = CLAY_TEXT_WRAP_NONE,
+				.wrapMode = CLAY_TEXT_WRAP_WORDS,
 				.textAlignment = CLAY_TEXT_ALIGN_CENTER
 			}));
 		}
@@ -908,15 +941,16 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 				.border = data->tasks.isEditing == IS_EDITING_TASK_DESC? eborder: _border,
 				.cornerRadius = data->tasks.isEditing == IS_EDITING_TASK_DESC? ecornerRadius: _cornerRadius,
 			}) {
-				// TODO: add blinking _ to denote that currently edditing? + a little different background
 				CLAY_TEXT(desc, {
 					.fontSize = font_size,
 					.fontId = FONT_ID,
 					.textColor = task->__descDefined__? data->colors[COLOR_TXT]: text_ColorNotDefined,
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
-					.textAlignment = CLAY_TEXT_ALIGN_LEFT,
-					.userData = task->__completed__ ? &g_task_index: NULL // Dummy userdata so who cares
+					.userData = task->__completed__ ?
+							(void*)TASK_COMPLETED :
+							data->tasks.isEditing ? (void*)TASK_EDITING:
+							(void*)TASK_INCOMPLETE
 				});
 				if (Clay_Hovered() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 					data->tasks.isEditing = IS_EDITING_TASK_DESC;
@@ -942,7 +976,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
 					.textAlignment = CLAY_TEXT_ALIGN_LEFT,
-					.userData = task->__completed__ ? &g_task_index: NULL // Dummy userdata so who cares
+					.userData = task->__completed__ ? (void*)TASK_COMPLETED : (void*)TASK_INCOMPLETE
 				});
 			}
 		}
@@ -977,7 +1011,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 					.letterSpacing = letter_spacing,
 					.wrapMode = CLAY_TEXT_WRAP_WORDS,
 					.textAlignment = CLAY_TEXT_ALIGN_RIGHT,
-					.userData = task->__completed__ ? &g_task_index: NULL // Dummy userdata so who cares
+					.userData = task->__completed__ ? (void*)TASK_COMPLETED : (void*)TASK_INCOMPLETE
 				});
 
 				if (Clay_Hovered() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -1053,7 +1087,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 	static int str_buffer_length = 0;
 	static struct String* SelectedString = NULL;
 	static int task_id = -1;
-	static int EDITING_STATE = IS_NOT_EDITING;
+	static enum EDITING_STATUS EDITING_STATE = IS_NOT_EDITING;
 
 	if (task_id != data->tasks.tasks[data->tasks.currentSelectedTask].id || EDITING_STATE != data->tasks.isEditing) {
 		// On click after editing, save whatever was typed
@@ -1258,7 +1292,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 			},
 		}) {
 			if (data->appState % 2 == 1) {
-				RenderButton(Focus_ShortBreak_LongBreak, COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_12_PX, FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
+				RenderButton(Focus_ShortBreak_LongBreak, COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_16_PX, FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
 			}
 
 			CLAY_AUTO_ID({
@@ -1294,7 +1328,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 					};
 
 					int font_size = data->appState % 2 == 0? HEADER1: HEADER2;
-					int font_id = data->appState % 2 == 0? FONT_ID_16_PX: FONT_ID_12_PX;
+					int font_id = data->appState % 2 == 0? FONT_ID_16_PX: FONT_ID_16_PX;
 					int letterSpacing = LETTER_SPACING;
 
 					CLAY_TEXT(str, {
@@ -1307,7 +1341,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 				}
 
 				CLAY_AUTO_ID({ .layout = { .sizing = { .height = CLAY_SIZING_PERCENT(0.1f) }}}) {}
-				RenderButton(str_Start_STOP, data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON, data->colors, data->appState % 2 == 0? FONT_ID_12_PX: FONT_ID_16_PX, data->appState % 2 == 0? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
+				RenderButton(str_Start_STOP, data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON, data->colors, FONT_ID_16_PX, data->appState % 2 == 0? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
 			}
 		}
 	}
@@ -1488,7 +1522,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 				};
 
 				int font_size = data->appState % 2 == 0? HEADER1 * 4: HEADER1 * 2;
-				int font_id = font_size == HEADER1 * 4? FONT_ID_64_PX: FONT_ID_32_PX;
+				int font_id = FONT_ID_64_PX;
 				int letterSpacing = LETTER_SPACING;
 
 				CLAY_TEXT(str, {
@@ -1504,7 +1538,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 					str_Start_STOP,
 					data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON,
 					data->colors,
-					data->appState % 2 == 0? FONT_ID_16_PX: FONT_ID_24_PX,
+					data->appState % 2 == 0? FONT_ID_16_PX: FONT_ID_32_PX,
 					fontSize,
 					getFontHelper(data, LETTER_SPACING)
 				);
@@ -1582,24 +1616,24 @@ void Device_Smart_Phone(PomodoroData* data) {
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
 		Start_Stop_Pressed(data);
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Focus))) {
-		if (data->appState != STATE_FOCUS && data->appState != STATE_FOCUS_PAUSED) {
+		// if (data->appState != STATE_FOCUS_PAUSED) {
 			data->appState = STATE_FOCUS_PAUSED;
 			data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 			PlaySound(data->sounds.sounds[SOUND_CLICK]);
-		}
+		// }
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Short_Break))) {
-		if (data->appState != STATE_SHORT_BREAK && data->appState != STATE_SHORT_BREAK_PAUSED) {
+		// if (data->appState != STATE_SHORT_BREAK_PAUSED) {
 			data->appState = STATE_SHORT_BREAK_PAUSED;
 			data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 			PlaySound(data->sounds.sounds[SOUND_CLICK]);
-		}
+		// }
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Long_Break))) {
-		if (data->appState != STATE_LONG_BREAK && data->appState != STATE_LONG_BREAK_PAUSED) {
+		// if (data->appState != STATE_LONG_BREAK_PAUSED) {
 			data->options.focusCount = 0;
 			data->appState = STATE_LONG_BREAK_PAUSED;
 			data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 			PlaySound(data->sounds.sounds[SOUND_CLICK]);
-		}
+		// }
 	}
 }
 
@@ -1631,15 +1665,20 @@ void ResetTimer(PomodoroData* data) {
 void Start_Stop_Pressed(PomodoroData* pomo_data) {
 	// Save Time focus/break rn
 	if (pomo_data->appState % 2 == 0) {
-		double initial_constant = pomo_data->options.time_constants[pomo_data->appState >> 1];
-		double delta = (initial_constant - pomo_data->timerConstraints.timer) - pomo_data->timerConstraints.savedTime;
+		float initial_constant = pomo_data->options.time_constants[pomo_data->appState >> 1];
+		float delta = (initial_constant - pomo_data->timerConstraints.timer) - pomo_data->timerConstraints.savedTime;
 		if (delta > 0) {
-			if ((pomo_data->appState >> 1) == 0) {
-				pomo_data->stat_today.focusTime += (int)delta;
+			const float threshold = 10.0f; // Threshold below which no save!
+			if (delta <= threshold + 1e-6) {
+				pomo_data->timerConstraints.timer += delta;
 			} else {
-				pomo_data->stat_today.breakTime += (int)delta;
+				if ((pomo_data->appState >> 1) == 0) {
+					pomo_data->stat_today.focusTime += (int)delta;
+				} else {
+					pomo_data->stat_today.breakTime += (int)delta;
+				}
+				pomo_data->timerConstraints.savedTime += delta;
 			}
-			pomo_data->timerConstraints.savedTime += delta;
 		}
 	}
 

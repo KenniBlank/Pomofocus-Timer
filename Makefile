@@ -8,7 +8,6 @@ CC = gcc
 CFLAGS = -I./include
 LDFLAGS = -lGL -lm -lpthread -ldl -lrt -lX11 -lraylib -L./src/lib/
 
-
 CPPFLAGS = -std=c99 -O3 -march=native -flto=auto -ffunction-sections -fdata-sections -DAPP_TITLE="\"PomoFocus Timer"\"
 LDFLAGS += -flto=auto -Wl,--gc-sections
 
@@ -30,6 +29,7 @@ crun: build/app
 build/app: $(FILES)
 	@mkdir -p $(BUILD_DIR)
 	@cp -r $(RESOURCES_DIR) $(BUILD_DIR)
+	@cp $(BUILD_DIR)/data.json $(BUILD_DIR)/data-bk.json
 	$(CC) $(CPPFLAGS) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
 clean:

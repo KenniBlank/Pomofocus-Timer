@@ -10,5 +10,13 @@
 	"2026-05-15":	{
 		"focusTime":	3000,
 		"breakTime":	300
+	},
+	"2026-05-17":	{
+		"focusTime":	10497,
+		"breakTime":	966
+	},
+	"2026-05-18":	{
+		"focusTime":	0,
+		"breakTime":	0
 	}
 }

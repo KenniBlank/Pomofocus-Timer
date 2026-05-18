@@ -1,17 +1,23 @@
 {
 	"tasks":	{
 		"tasks":	[{
-				"count":	5,
+				"count":	0,
 				"expected":	0,
 				"__completed__":	0,
 				"__descDefined__":	1,
-				"desc":	"Homework"
+				"desc":	"Chemistry"
+			}, {
+				"count":	0,
+				"expected":	0,
+				"__completed__":	0,
+				"__descDefined__":	1,
+				"desc":	"Math's exam"
 			}],
 		"currentSelectedTask":	0
 	},
 	"appState":	1,
 	"options":	{
-		"masterVolume":	0.20000000298023224,
+		"masterVolume":	1,
 		"focusCount":	0,
 		"FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK":	4,
 		"REPEAT_DELAY":	0.300000011920929,
@@ -22,16 +28,16 @@
 		"time_constants":	[1500, 300, 900]
 	},
 	"timerConstraints":	{
-		"timer":	1490.7589111328125,
-		"savedTime":	9.2410888671875
+		"timer":	1500,
+		"savedTime":	0
 	},
 	"__DEVICE_DIMENSION__":	{
 		"x":	1423,
 		"y":	1725
 	},
 	"stat_today":	{
-		"key":	"2026-05-16",
-		"focusTime":	4508,
-		"breakTime":	1500
+		"key":	"2026-05-18",
+		"focusTime":	0,
+		"breakTime":	0
 	}
 }

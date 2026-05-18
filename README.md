@@ -6,8 +6,15 @@ A pomodoro timer made using:
 - [CLAY](https://github.com/nicbarker/clay/)
 
 ## ScreenShots:
+
+Inactive + Active State:
+
 ![Inactive](Design/App_Inactive.png)
 ![Active](Design/App_Active.png)
+
+App's Design:
+
+![App Design](Design/AppDesign.png)
 
 ## Attributions
 ### Audio
