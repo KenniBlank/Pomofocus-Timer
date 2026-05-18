@@ -7,18 +7,18 @@
 				"__descDefined__":	1,
 				"desc":	"Chemistry"
 			}, {
-				"count":	0,
+				"count":	3,
 				"expected":	0,
 				"__completed__":	0,
 				"__descDefined__":	1,
-				"desc":	"Math's exam"
+				"desc":	"Math's Exam"
 			}],
 		"currentSelectedTask":	0
 	},
 	"appState":	1,
 	"options":	{
 		"masterVolume":	1,
-		"focusCount":	0,
+		"focusCount":	2,
 		"FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK":	4,
 		"REPEAT_DELAY":	0.300000011920929,
 		"REPEAT_INTERVAL":	0.0599999986588955,
@@ -32,12 +32,12 @@
 		"savedTime":	0
 	},
 	"__DEVICE_DIMENSION__":	{
-		"x":	1423,
-		"y":	1725
+		"x":	951,
+		"y":	1564
 	},
 	"stat_today":	{
-		"key":	"2026-05-18",
-		"focusTime":	0,
-		"breakTime":	0
+		"key":	"2026-05-19",
+		"focusTime":	3000,
+		"breakTime":	1500
 	}
 }

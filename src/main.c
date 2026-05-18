@@ -64,7 +64,7 @@
 #define HEADER5 (83)
 #define HEADER6 (67)
 #define PARAGRAPH (100)
-#define LETTER_SPACING (BASE_FONT_SIZE >> 1)
+#define LETTER_SPACING (BASE_FONT_SIZE >> 3)
 #define BORDER_RADIUS (6 * 4)
 #define BUTTON_PADDING (6 * 4)
 #define BORDER_WIDTH (5)
@@ -1193,8 +1193,7 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 	}
 
 	// UI
-	int screenWidth = GetScreenWidth();
-	if (screenWidth >= DEVICE_SMART_PHONE_W) {
+	if (GetScreenWidth() >= DEVICE_SMART_PHONE_W && GetScreenHeight() >= DEVICE_SMART_PHONE_W * 1.5f) {
 		data->device = DEVICE_SMART_PHONE;
 	} else {
 		data->device = DEVICE_WATCH;
@@ -1328,7 +1327,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 					};
 
 					int font_size = data->appState % 2 == 0? HEADER1: HEADER2;
-					int font_id = data->appState % 2 == 0? FONT_ID_16_PX: FONT_ID_16_PX;
+					int font_id = data->appState % 2 == 0? FONT_ID_32_PX: FONT_ID_16_PX;
 					int letterSpacing = LETTER_SPACING;
 
 					CLAY_TEXT(str, {
@@ -1359,8 +1358,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 void Device_Smart_Phone(PomodoroData* data) {
 	Clay_String str_Start_STOP = {.chars = data->appState % 2 == 0 ? "  STOP  ": "  Start  ", .isStaticallyAllocated = false};
 	str_Start_STOP.length = strlen(str_Start_STOP.chars);
-
-	bool longerTxtOnButtonCondition = GetScreenWidth() > (DEVICE_SMART_PHONE_W + 100) * g_UI_SCALE;
+	bool longerTxtOnButtonCondition = false; // TODO Priority!!!
 
 	Clay_String app_title = {.chars = longerTxtOnButtonCondition ? APP_TITLE : "PomoFocus", .isStaticallyAllocated = false};
 	app_title.length = strlen(app_title.chars);
@@ -1487,7 +1485,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 							.height = CLAY_SIZING_FIT(0)
 						},
 						.padding = CLAY_PADDING_ALL(getFontHelper(data, BUTTON_PADDING * 2)),
-						.childGap = FONT_SIZE((BUTTON_PADDING * 3))
+						.childGap = getFontHelper(data, BUTTON_PADDING * 2)
 					},
 					.border = {
 						.width = CLAY_BORDER_OUTSIDE(borderWidth),
@@ -1668,11 +1666,12 @@ void Start_Stop_Pressed(PomodoroData* pomo_data) {
 		float initial_constant = pomo_data->options.time_constants[pomo_data->appState >> 1];
 		float delta = (initial_constant - pomo_data->timerConstraints.timer) - pomo_data->timerConstraints.savedTime;
 		if (delta > 0) {
-			const float threshold = 10.0f; // Threshold below which no save!
-			if (delta <= threshold + 1e-6) {
+			const float threshold = 5.0f; // Threshold below which no save!
+			if (delta <= threshold + 1e-6f) {
 				pomo_data->timerConstraints.timer += delta;
+				pomo_data->timerConstraints.savedTime = 0.0f;
 			} else {
-				if ((pomo_data->appState >> 1) == 0) {
+				if (pomo_data->appState == STATE_FOCUS) {
 					pomo_data->stat_today.focusTime += (int)delta;
 				} else {
 					pomo_data->stat_today.breakTime += (int)delta;
