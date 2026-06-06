@@ -1110,7 +1110,11 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 			SelectedString = EDITING_STATE == IS_EDITING_TASK_DESC? &data->tasks.tasks[data->tasks.currentSelectedTask].desc: &data->tasks.tasks[data->tasks.currentSelectedTask].count_expected;
 			struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 
-			sscanf(SelectedString->chars, "%d", &task->expected);
+			int task_count = task->count;
+			if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) != 2) {
+				sscanf(SelectedString->chars, "%d", &task->expected);
+				task->count = task_count;
+			}
 			snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 			task->count_expected.length = strlen(task->count_expected.chars);
 			SelectedString->chars[SelectedString->length] = '\0';
@@ -1141,7 +1145,11 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 
 		case 1: {
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				sscanf(SelectedString->chars, "%d", &task->expected);
+				int task_count = task->count;
+				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) != 2) {
+					sscanf(SelectedString->chars, "%d", &task->expected);
+					task->count = task_count;
+				}
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
@@ -1165,7 +1173,11 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 
 		case 3: {
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				sscanf(SelectedString->chars, "%d", &task->expected);
+				int task_count = task->count;
+				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) != 2) {
+					sscanf(SelectedString->chars, "%d", &task->expected);
+					task->count = task_count;
+				}
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
