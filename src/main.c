@@ -50,8 +50,8 @@
 	#define PRINT(variable) ((void*)0)
 	#define PRINT_S(variable) ((void*)0)
 #else
-	#define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout);
-	#define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout);
+	#define PRINT(variable) printf(#variable " = %g\n", (double) variable); fflush(stdout)
+	#define PRINT_S(variable) printf(#variable " = %s\n", variable); fflush(stdout)
 #endif
 
 #define max(a, b) (a) > (b) ? (a): (b)
@@ -150,6 +150,7 @@ typedef enum {
 	STATE_LONG_BREAK,
 	STATE_LONG_BREAK_PAUSED,
 } AppState;
+#define APP_PAUSED(state) ((state) % 2 != 0)
 
 typedef enum {
 	DEVICE_WATCH,
@@ -191,6 +192,11 @@ typedef struct {
 	Vector2 baseDeviceDimensions;
 	SoundData sounds;
 } PomodoroData;
+
+void Expected_End_Time(PomodoroData *pomo_data) {
+	// pomo_data->timerConstraints.timer;
+	// pomo_data->options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK
+}
 
 void ResetTimer(PomodoroData* pomo_data);
 void Start_Stop_Pressed(PomodoroData* pomo_data);
@@ -260,7 +266,7 @@ static int LoadData(PomodoroData* data) {
 	cJSON *options = JSON(json, "options");
 	if (options != NULL) {
 		JSON_DBL(options, "masterVolume", data->options.masterVolume);
-		JSON_INT(options, "focusCount", data->options.focusCount);
+		// JSON_INT(options, "focusCount", data->options.focusCount);
 		JSON_INT(options, "FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK", data->options.FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK);
 		JSON_DBL(options, "REPEAT_DELAY", data->options.REPEAT_DELAY);
 		JSON_DBL(options, "REPEAT_INTERVAL", data->options.REPEAT_INTERVAL);
@@ -322,7 +328,8 @@ static int LoadData(PomodoroData* data) {
 	int app_state_val = 0;
 	JSON_INT(json, "appState", app_state_val);
 	data->appState = app_state_val;
-	data->appState += data->appState % 2 == 0 ? 1 : 0;
+	// APP_PAUSED(data->appState);
+	data->appState += !APP_PAUSED(data->appState) ? 1 : 0;
 
 	// TimerConstraints
 	cJSON *timerConstraints = JSON(json, "timerConstraints");
@@ -413,8 +420,8 @@ static int SaveData(PomodoroData* data) {
 	cJSON *masterVolume = cJSON_CreateNumber(opts->masterVolume);
 	cJSON_AddItemToObject(options, "masterVolume", masterVolume);
 
-	cJSON *focusCount = cJSON_CreateNumber(opts->focusCount);
-	cJSON_AddItemToObject(options, "focusCount", focusCount);
+	// cJSON *focusCount = cJSON_CreateNumber(opts->focusCount);
+	// cJSON_AddItemToObject(options, "focusCount", focusCount);
 
 	cJSON *FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK = cJSON_CreateNumber(opts->FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK);
 	cJSON_AddItemToObject(options, "FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK", FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK);
@@ -567,7 +574,7 @@ int initialize_data(PomodoroData* data) {
 	data->sounds.sounds[SOUND_CLICK] = LoadSound("resources/sounds/mouseClick.wav");
 	data->sounds.count[SOUND_CLICK] = 1;
 	data->sounds.sounds[SOUND_FOCUS] = LoadSound("resources/sounds/focus.wav");
-	data->sounds.count[SOUND_FOCUS] = -1;
+	data->sounds.count[SOUND_FOCUS] = 3;
 	data->sounds.sounds[SOUND_BREAK] = LoadSound("resources/sounds/break.wav");
 	data->sounds.count[SOUND_BREAK] = -1;
 
@@ -575,16 +582,22 @@ int initialize_data(PomodoroData* data) {
 	return 0;
 }
 
-void clean_data(PomodoroData* data) {
-	SaveData(data);
+void clean_data(PomodoroData* pomo_data) {
+	float initial_constant = pomo_data->options.time_constants[pomo_data->appState >> 1];
+	float delta = (initial_constant - pomo_data->timerConstraints.timer) - pomo_data->timerConstraints.savedTime;
+	if (pomo_data->appState == STATE_FOCUS) pomo_data->stat_today.focusTime += delta;
+	else pomo_data->stat_today.breakTime += delta;
+	pomo_data->timerConstraints.savedTime += delta;
 
-	Clean_Tasks(&data->tasks);
-	if (data->sounds.sounds) {
+	SaveData(pomo_data);
+
+	Clean_Tasks(&pomo_data->tasks);
+	if (pomo_data->sounds.sounds) {
 		for (int i = 0; i < SOUND_COUNT; i++) {
-			UnloadSound(data->sounds.sounds[i]);
+			UnloadSound(pomo_data->sounds.sounds[i]);
 		}
-		free(data->sounds.sounds);
-		data->sounds.sounds = NULL;
+		free(pomo_data->sounds.sounds);
+		pomo_data->sounds.sounds = NULL;
 	}
 }
 
@@ -680,6 +693,7 @@ int main(void) {
 		// On space, start/stop switch and stop any sound playing iff pressed:
 		if (IsKeyPressed(KEY_SPACE) && !pomo_data.tasks.isEditing) {
 			Start_Stop_Pressed(&pomo_data);
+			pomo_data.tasks.isEditing = false;
 		}
 
 		if (g_playSound) {
@@ -723,7 +737,7 @@ int main(void) {
 							.width = boundingBox.width,
 							.height = throughLineHeight,
 						}, CLAY_COLOR_TO_RAYLIB_COLOR(textData->textColor));
-					} else if (renderCommand->userData == (void*) TASK_EDITING) {
+					} else if (pomo_data.tasks.isEditing == IS_EDITING_TASK_DESC && renderCommand->userData == (void*) TASK_EDITING) {
 						if (j + 1 < renderCommands.length) {
 							Clay_RenderCommand *nextCommand = Clay_RenderCommandArray_Get(&renderCommands, j + 1);
 							if (nextCommand->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT && nextCommand->userData == (void*)TASK_EDITING) {
@@ -737,6 +751,7 @@ int main(void) {
 						Clay_BoundingBox boundingBox = {renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height};
 
 						if (IsKeyDown(KEY_DELETE)) {
+							Expected_End_Time(&pomo_data);
 							DrawRectangleRec((Rectangle){.x = boundingBox.x, .y = boundingBox.y, .height = boundingBox.height, .width = boundingBox.width}, MAGENTA);
 						}
 
@@ -756,7 +771,7 @@ int main(void) {
 					}
 				}
 			}
-			EndDrawing();
+		EndDrawing();
 	}
 
 	for (int i = 0; i < FONT_SIZE; i++) {
@@ -867,7 +882,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 
 	CLAY_AUTO_ID({
 		.layout = layout,
-		.backgroundColor = data->appState % 2 != 0? taskIndex == data->tasks.currentSelectedTask? data->colors[COLOR_BACKGROUND_SELECTED_TASK]: data->colors[COLOR_BACKGROUND_TASK]: data->colors[COLOR_BACKGROUND_MAIN_ACTIVE]
+		.backgroundColor = APP_PAUSED(data->appState)? taskIndex == data->tasks.currentSelectedTask? data->colors[COLOR_BACKGROUND_SELECTED_TASK]: data->colors[COLOR_BACKGROUND_TASK]: data->colors[COLOR_BACKGROUND_MAIN_ACTIVE]
 	}) {
 		if (Clay_Hovered()) {
 			if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
@@ -882,7 +897,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 			}
 		}
 
-		if (taskIndex == data->tasks.currentSelectedTask && data->appState % 2 != 0) {
+		if (taskIndex == data->tasks.currentSelectedTask && APP_PAUSED(data->appState)) {
 			CLAY_AUTO_ID({
 				.layout = {
 					.sizing = {
@@ -1095,8 +1110,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 			SelectedString = EDITING_STATE == IS_EDITING_TASK_DESC? &data->tasks.tasks[data->tasks.currentSelectedTask].desc: &data->tasks.tasks[data->tasks.currentSelectedTask].count_expected;
 			struct Task *task = &data->tasks.tasks[data->tasks.currentSelectedTask];
 
-			int NA;
-			sscanf(SelectedString->chars, "%d / %d", &NA, &task->expected);
+			sscanf(SelectedString->chars, "%d", &task->expected);
 			snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 			task->count_expected.length = strlen(task->count_expected.chars);
 			SelectedString->chars[SelectedString->length] = '\0';
@@ -1106,12 +1120,12 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		str_buffer[str_buffer_length] = '\0';
 		task_id = data->tasks.tasks[data->tasks.currentSelectedTask].id;
 		EDITING_STATE = data->tasks.isEditing;
+
+		data->tasks.tasks[data->tasks.currentSelectedTask].count_expected.length = 0;
+
 		SelectedString = EDITING_STATE == IS_EDITING_TASK_DESC? &data->tasks.tasks[data->tasks.currentSelectedTask].desc: &data->tasks.tasks[data->tasks.currentSelectedTask].count_expected;
 
-		if (
-			(data->tasks.tasks[data->tasks.currentSelectedTask].__descDefined__ && EDITING_STATE == IS_EDITING_TASK_DESC) ||
-			(data->tasks.tasks[data->tasks.currentSelectedTask].__countExpectedDefined__ && EDITING_STATE == IS_EDITING_TASK_COUNT_EXPECTED)
-		) {
+		if (data->tasks.tasks[data->tasks.currentSelectedTask].__descDefined__ && EDITING_STATE == IS_EDITING_TASK_DESC) {
 			snprintf(str_buffer, STR_BUFFER_CAPACITY, "%s", SelectedString->chars);
 			str_buffer_length = strlen(str_buffer);
 		} else {
@@ -1127,8 +1141,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 
 		case 1: {
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				int NA;
-				sscanf(SelectedString->chars, "%d / %d", &NA, &task->expected);
+				sscanf(SelectedString->chars, "%d", &task->expected);
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
@@ -1152,8 +1165,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 
 		case 3: {
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
-				int NA;
-				sscanf(SelectedString->chars, "%d / %d", &NA, &task->expected);
+				sscanf(SelectedString->chars, "%d", &task->expected);
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
@@ -1171,10 +1183,6 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 }
 
 static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, PomodoroData* data) {
-	if (IsWindowResized()) {
-		// TODO: Find a way to make g_UI_SCALE change accordingly
-	}
-
 	// CLAY SPECIFIC EVENTS:
 	Clay_SetLayoutDimensions((Clay_Dimensions) {.width = GetScreenWidth(), .height = GetScreenHeight()});
 
@@ -1240,7 +1248,7 @@ static void HANDLE_EVENTS(uint32_t* totalMemorySize, Clay_Arena* clayMemory, Pom
 
 void Device_Smart_Watch(PomodoroData* data) {
 	// Good enough
-	Clay_String str_Start_STOP = {.chars = data->appState % 2 == 0 ? "  STOP  ": "  Start  ", .isStaticallyAllocated = false};
+	Clay_String str_Start_STOP = {.chars = !APP_PAUSED(data->appState) ? "  STOP  ": "  Start  ", .isStaticallyAllocated = false};
 	str_Start_STOP.length = strlen(str_Start_STOP.chars);
 	Clay_String Focus_ShortBreak_LongBreak = { .isStaticallyAllocated = false };
 
@@ -1279,7 +1287,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 				.y = CLAY_ALIGN_Y_CENTER
 			},
 		},
-		.backgroundColor = data->colors[data->appState % 2 == 0? COLOR_BACKGROUND_MAIN_ACTIVE: COLOR_BACKGROUND_MAIN_INACTIVE],
+		.backgroundColor = data->colors[!APP_PAUSED(data->appState)? COLOR_BACKGROUND_MAIN_ACTIVE: COLOR_BACKGROUND_MAIN_INACTIVE],
 	}) {
 		CLAY(CLAY_ID("Smart Watch"), {
 			.layout  = {
@@ -1290,7 +1298,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 				},
 			},
 		}) {
-			if (data->appState % 2 == 1) {
+			if (APP_PAUSED(data->appState)) {
 				RenderButton(Focus_ShortBreak_LongBreak, COLOR_BACKGROUND_FSL_BUTTON, data->colors, FONT_ID_16_PX, FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
 			}
 
@@ -1326,8 +1334,8 @@ void Device_Smart_Watch(PomodoroData* data) {
 						.isStaticallyAllocated = true
 					};
 
-					int font_size = data->appState % 2 == 0? HEADER1: HEADER2;
-					int font_id = data->appState % 2 == 0? FONT_ID_32_PX: FONT_ID_16_PX;
+					int font_size = !APP_PAUSED(data->appState)? HEADER1: HEADER2;
+					int font_id = !APP_PAUSED(data->appState)? FONT_ID_32_PX: FONT_ID_16_PX;
 					int letterSpacing = LETTER_SPACING;
 
 					CLAY_TEXT(str, {
@@ -1340,23 +1348,25 @@ void Device_Smart_Watch(PomodoroData* data) {
 				}
 
 				CLAY_AUTO_ID({ .layout = { .sizing = { .height = CLAY_SIZING_PERCENT(0.1f) }}}) {}
-				RenderButton(str_Start_STOP, data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON, data->colors, FONT_ID_16_PX, data->appState % 2 == 0? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
+				RenderButton(str_Start_STOP, !APP_PAUSED(data->appState)? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON, data->colors, FONT_ID_16_PX, !APP_PAUSED(data->appState)? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), getFontHelper(data, LETTER_SPACING));
 			}
 		}
 	}
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
 		Start_Stop_Pressed(data);
+		data->tasks.isEditing = false;
 	}
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(Focus_ShortBreak_LongBreak))) {
 		data->appState = data->appState == STATE_LONG_BREAK_PAUSED? STATE_FOCUS_PAUSED: data->appState + 2;
 		data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
+		data->tasks.isEditing = false;
 	}
 }
 
 void Device_Smart_Phone(PomodoroData* data) {
-	Clay_String str_Start_STOP = {.chars = data->appState % 2 == 0 ? "  STOP  ": "  Start  ", .isStaticallyAllocated = false};
+	Clay_String str_Start_STOP = {.chars = !APP_PAUSED(data->appState) ? "  STOP  ": "  Start  ", .isStaticallyAllocated = false};
 	str_Start_STOP.length = strlen(str_Start_STOP.chars);
 	bool longerTxtOnButtonCondition = false; // TODO Priority!!!
 
@@ -1390,10 +1400,10 @@ void Device_Smart_Phone(PomodoroData* data) {
 			},
 			.childGap = getFontHelper(data, PARAGRAPH)
 		},
-		.backgroundColor = data->colors[data->appState % 2 == 0? COLOR_BACKGROUND_ACTIVE: COLOR_BACKGROUND_INACTIVE],
+		.backgroundColor = data->colors[!APP_PAUSED(data->appState)? COLOR_BACKGROUND_ACTIVE: COLOR_BACKGROUND_INACTIVE],
 	}) {
 		float WIDTH = 0.0f;
-		if (data->appState % 2 == 0) {
+		if (!APP_PAUSED(data->appState)) {
 			WIDTH = Clay_GetElementData(CLAY_ID("Timer")).boundingBox.width;
 		} else {
 			WIDTH = Clay_GetElementData(CLAY_ID("Buttons")).boundingBox.width + getFontHelper(data, HEADER2) * 2;
@@ -1401,7 +1411,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 		float borderWidth = getFontHelper(data, BORDER_WIDTH * 2);
 		borderWidth = (borderWidth > 1.0f) ? borderWidth: 1.0f;
 
-		if (data->appState % 2 != 0) {
+		if (APP_PAUSED(data->appState)) {
 			CLAY(CLAY_ID("Title"), {
 				.layout = {
 					.sizing = {
@@ -1457,9 +1467,9 @@ void Device_Smart_Phone(PomodoroData* data) {
 				.color = data->colors[COLOR_BORDER]
 			},
 			.cornerRadius = CLAY_CORNER_RADIUS(getFontHelper(data, BORDER_WIDTH * 4)),
-			.backgroundColor = data->appState % 2 == 0? data->colors[COLOR_BACKGROUND_MAIN_ACTIVE]: data->colors[COLOR_BACKGROUND_MAIN_INACTIVE]
+			.backgroundColor = !APP_PAUSED(data->appState)? data->colors[COLOR_BACKGROUND_MAIN_ACTIVE]: data->colors[COLOR_BACKGROUND_MAIN_INACTIVE]
 		}){
-			if (data->appState % 2 == 0) {
+			if (!APP_PAUSED(data->appState)) {
 				if (tasks.currentSelectedTask >= 0 && tasks.currentSelectedTask < tasks.tasks_count && data->appState == STATE_FOCUS && !data->tasks.tasks[data->tasks.currentSelectedTask].__completed__ && data->tasks.tasks[data->tasks.currentSelectedTask].__descDefined__) {
 					CLAY_AUTO_ID({
 						.clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() },
@@ -1519,7 +1529,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 					.isStaticallyAllocated = true
 				};
 
-				int font_size = data->appState % 2 == 0? HEADER1 * 4: HEADER1 * 2;
+				int font_size = !APP_PAUSED(data->appState)? HEADER1 * 4: HEADER1 * 2;
 				int font_id = FONT_ID_64_PX;
 				int letterSpacing = LETTER_SPACING;
 
@@ -1531,23 +1541,23 @@ void Device_Smart_Phone(PomodoroData* data) {
 					.textAlignment = CLAY_TEXT_ALIGN_CENTER
 				});
 
-				int fontSize = fmax(data->appState % 2 == 0? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), data->appState % 2 == 0? getFontHelper(data, HEADER3): getFontHelper(data, HEADER2));
+				int fontSize = fmax(!APP_PAUSED(data->appState)? FONT_SIZE(HEADER4): FONT_SIZE(HEADER6), !APP_PAUSED(data->appState)? getFontHelper(data, HEADER3): getFontHelper(data, HEADER2));
 				RenderButton(
 					str_Start_STOP,
-					data->appState % 2 == 0? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON,
+					!APP_PAUSED(data->appState)? COLOR_BACKGROUND_SS_BUTTON_SELECTED: COLOR_BACKGROUND_SS_BUTTON,
 					data->colors,
-					data->appState % 2 == 0? FONT_ID_16_PX: FONT_ID_32_PX,
+					!APP_PAUSED(data->appState)? FONT_ID_16_PX: FONT_ID_32_PX,
 					fontSize,
 					getFontHelper(data, LETTER_SPACING)
 				);
 			}
 		}
 
-		if (data->appState % 2 != 0) {
+		if (APP_PAUSED(data->appState)) {
 			CLAY_AUTO_ID({
 				.layout = {
 					.layoutDirection = CLAY_LEFT_TO_RIGHT,
-					.childGap = getFontHelper(data, PARAGRAPH)
+					.childGap = getFontHelper(data, BUTTON_PADDING)
 				}
 			}) {
 				Clay_String ADD_TASK = { .chars = " +Task ", .isStaticallyAllocated = false};
@@ -1613,17 +1623,20 @@ void Device_Smart_Phone(PomodoroData* data) {
 
 	if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Start_STOP))) {
 		Start_Stop_Pressed(data);
+		data->tasks.isEditing = false;
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Focus))) {
 		// if (data->appState != STATE_FOCUS_PAUSED) {
 			data->appState = STATE_FOCUS_PAUSED;
 			data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 			PlaySound(data->sounds.sounds[SOUND_CLICK]);
+			data->tasks.isEditing = false;
 		// }
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Short_Break))) {
 		// if (data->appState != STATE_SHORT_BREAK_PAUSED) {
 			data->appState = STATE_SHORT_BREAK_PAUSED;
 			data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 			PlaySound(data->sounds.sounds[SOUND_CLICK]);
+			data->tasks.isEditing = false;
 		// }
 	} else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && Clay_PointerOver(Clay_GetElementId(str_Long_Break))) {
 		// if (data->appState != STATE_LONG_BREAK_PAUSED) {
@@ -1631,6 +1644,7 @@ void Device_Smart_Phone(PomodoroData* data) {
 			data->appState = STATE_LONG_BREAK_PAUSED;
 			data->timerConstraints.timer = data->options.time_constants[data->appState >> 1];
 			PlaySound(data->sounds.sounds[SOUND_CLICK]);
+			data->tasks.isEditing = false;
 		// }
 	}
 }
@@ -1662,7 +1676,7 @@ void ResetTimer(PomodoroData* data) {
 
 void Start_Stop_Pressed(PomodoroData* pomo_data) {
 	// Save Time focus/break rn
-	if (pomo_data->appState % 2 == 0) {
+	if (!APP_PAUSED(pomo_data->appState)) {
 		float initial_constant = pomo_data->options.time_constants[pomo_data->appState >> 1];
 		float delta = (initial_constant - pomo_data->timerConstraints.timer) - pomo_data->timerConstraints.savedTime;
 		if (delta > 0) {
@@ -1671,11 +1685,8 @@ void Start_Stop_Pressed(PomodoroData* pomo_data) {
 				pomo_data->timerConstraints.timer += delta;
 				pomo_data->timerConstraints.savedTime = 0.0f;
 			} else {
-				if (pomo_data->appState == STATE_FOCUS) {
-					pomo_data->stat_today.focusTime += (int)delta;
-				} else {
-					pomo_data->stat_today.breakTime += (int)delta;
-				}
+				if (pomo_data->appState == STATE_FOCUS) pomo_data->stat_today.focusTime += (int)delta;
+				else pomo_data->stat_today.breakTime += (int)delta;
 				pomo_data->timerConstraints.savedTime += delta;
 			}
 		}

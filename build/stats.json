@@ -18,5 +18,65 @@
 	"2026-05-18":	{
 		"focusTime":	1499,
 		"breakTime":	300
+	},
+	"2026-05-20":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-05-21":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-05-22":	{
+		"focusTime":	4635,
+		"breakTime":	900
+	},
+	"2026-05-24":	{
+		"focusTime":	1218,
+		"breakTime":	0
+	},
+	"2026-05-25":	{
+		"focusTime":	7279,
+		"breakTime":	1200
+	},
+	"2026-05-26":	{
+		"focusTime":	5347,
+		"breakTime":	193
+	},
+	"2026-05-27":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-05-28":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-05-29":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-05-31":	{
+		"focusTime":	4632,
+		"breakTime":	1200
+	},
+	"2026-06-01":	{
+		"focusTime":	8814,
+		"breakTime":	1343
+	},
+	"2026-06-03":	{
+		"focusTime":	14568,
+		"breakTime":	2796
+	},
+	"2026-06-04":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-06-05":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-06-06":	{
+		"focusTime":	0,
+		"breakTime":	0
 	}
 }
