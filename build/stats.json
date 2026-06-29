@@ -76,6 +76,78 @@
 		"breakTime":	0
 	},
 	"2026-06-06":	{
+		"focusTime":	6787,
+		"breakTime":	1349
+	},
+	"2026-06-07":	{
+		"focusTime":	1500,
+		"breakTime":	300
+	},
+	"2026-06-08":	{
+		"focusTime":	7432,
+		"breakTime":	1199
+	},
+	"2026-06-09":	{
+		"focusTime":	5742,
+		"breakTime":	300
+	},
+	"2026-06-10":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-06-11":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-06-12":	{
+		"focusTime":	1512,
+		"breakTime":	288
+	},
+	"2026-06-13":	{
+		"focusTime":	13075,
+		"breakTime":	3122
+	},
+	"2026-06-15":	{
+		"focusTime":	4240,
+		"breakTime":	994
+	},
+	"2026-06-16":	{
+		"focusTime":	1499,
+		"breakTime":	300
+	},
+	"2026-06-19":	{
+		"focusTime":	9418,
+		"breakTime":	1012
+	},
+	"2026-06-20":	{
+		"focusTime":	10496,
+		"breakTime":	2468
+	},
+	"2026-06-21":	{
+		"focusTime":	2258,
+		"breakTime":	739
+	},
+	"2026-06-23":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-06-24":	{
+		"focusTime":	8398,
+		"breakTime":	1200
+	},
+	"2026-06-25":	{
+		"focusTime":	0,
+		"breakTime":	0
+	},
+	"2026-06-26":	{
+		"focusTime":	14077,
+		"breakTime":	1420
+	},
+	"2026-06-27":	{
+		"focusTime":	7525,
+		"breakTime":	1757
+	},
+	"2026-06-29":	{
 		"focusTime":	0,
 		"breakTime":	0
 	}

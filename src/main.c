@@ -28,6 +28,7 @@
 #define getHeightRatio(baseHeight) (GetScreenHeight() / ((baseHeight) * 1.0f))
 #define getCubicRatio(baseWidth, baseHeight) fmin(getWidthRatio(baseWidth), getHeightRatio(baseHeight))
 #define getFontSize(baseWidth, baseHeight, fontSize) getCubicRatio(baseWidth, baseHeight) * (fontSize)
+
 #define getFontHelper(data, fontSize) FONT_SIZE(getFontSize(data->baseDeviceDimensions.x, data->baseDeviceDimensions.y, fontSize))
 
 #define INVERT_CLAY_COLOR(color) \
@@ -44,7 +45,7 @@
 
 #define FILE_NAME "data.json"
 #define TASKS_LIST "data.json"
-#define APP_ICON_LOC "./resources/appIcon-32.png"
+#define APP_ICON_LOC "resources/appIcon-32.png"
 
 #ifndef DEBUG
 	#define PRINT(variable) ((void*)0)
@@ -183,7 +184,7 @@ typedef struct {
 	AppState appState;
 	Options options;
 	TimerConstraints timerConstraints;
-	Vector2 __DEVICE_DIMENSION__; // Only for opening back again in same width
+	Vector2 __DEVICE_DIMENSION__; // For opening back again in same width, height
 
 	Stat stat_today;
 
@@ -930,6 +931,7 @@ void RenderTask(PomodoroData *data, int taskIndex, const int WIDTH, int FONT_ID,
 					if (Clay_Hovered() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
 						Tasks *tasks = &data->tasks;
 						task->__completed__ = !task->__completed__;
+						// TODO: Complete task = reset timer?
 						if (task->__completed__) {
 							struct Task tsk = *task;
 							for (int i = tasks->currentSelectedTask; i < tasks->tasks_count - 1; i++) {
@@ -1144,6 +1146,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		case 0: break;
 
 		case 1: {
+			SelectedString->chars[SelectedString->length] = '\0';
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
 				int task_count = task->count;
 				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) != 2) {
@@ -1153,7 +1156,6 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
-			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
 			SelectedString = NULL;
 
@@ -1172,6 +1174,7 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 		}
 
 		case 3: {
+			SelectedString->chars[SelectedString->length] = '\0';
 			if (data->tasks.isEditing == IS_EDITING_TASK_COUNT_EXPECTED) {
 				int task_count = task->count;
 				if (sscanf(SelectedString->chars, "%d / %d", &task->count, &task->expected) != 2) {
@@ -1181,7 +1184,6 @@ static void HANDLE_EDITS_TO_TASK(PomodoroData* data) {
 				snprintf(task->count_expected.chars, STR_BUFFER_CAPACITY, "%d / %d", task->count, task->expected);
 				task->count_expected.length = strlen(task->count_expected.chars);
 			}
-			SelectedString->chars[SelectedString->length] = '\0';
 			task_id = -1;
 			SelectedString = NULL;
 
@@ -1380,7 +1382,7 @@ void Device_Smart_Watch(PomodoroData* data) {
 void Device_Smart_Phone(PomodoroData* data) {
 	Clay_String str_Start_STOP = {.chars = !APP_PAUSED(data->appState) ? "  STOP  ": "  Start  ", .isStaticallyAllocated = false};
 	str_Start_STOP.length = strlen(str_Start_STOP.chars);
-	bool longerTxtOnButtonCondition = false; // TODO Priority!!!
+	bool longerTxtOnButtonCondition = false; // Solution: but no longer needed (GetScreenWidth() / (float) GetScreenHeight()) > 1.0f; // TODO Priority!!!
 
 	Clay_String app_title = {.chars = longerTxtOnButtonCondition ? APP_TITLE : "PomoFocus", .isStaticallyAllocated = false};
 	app_title.length = strlen(app_title.chars);

@@ -3,9 +3,9 @@
 #include <stdio.h>
 
 #ifdef _WIN32
-	void Notify(char *title, char *desc, int timeout) {}
+	void Notify(char *title, char *desc, char *appIconLocation, int timeout) {}
 #elif __APPLE__
-	void Notify(char *title, char *desc, int timeout) {}
+	void Notify(char *title, char *desc, char *appIconLocation, int timeout) {}
 #elif __linux__
 	void Notify(char *title, char *desc, char *appIconLocation, int timeout) {
 		char notification[512];

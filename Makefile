@@ -2,7 +2,7 @@
 SHELL=/bin/bash
 
 CC = gcc
-# CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address -O0
+# CPPFLAGS = -std=c99 -g -Wextra -Wall -fsanitize=address -O0 -Wpedantic -Wshadow -Wformat=2
 # CPPFLAGS += -DDEBUG
 # CPPFLAGS += -Werror
 CFLAGS = -I./include

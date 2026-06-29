@@ -1,15 +1,15 @@
 {
 	"tasks":	{
 		"tasks":	[{
-				"count":	1,
+				"count":	6,
 				"expected":	10,
 				"__completed__":	0,
 				"__descDefined__":	1,
-				"desc":	"Arduino"
+				"desc":	"EDC Exam Prep"
 			}],
 		"currentSelectedTask":	0
 	},
-	"appState":	1,
+	"appState":	3,
 	"options":	{
 		"masterVolume":	1,
 		"FOCUS_COUNT_THRESHOLD_FOR_LONG_BREAK":	4,
@@ -21,16 +21,16 @@
 		"time_constants":	[1500, 300, 900]
 	},
 	"timerConstraints":	{
-		"timer":	1500,
+		"timer":	300,
 		"savedTime":	0
 	},
 	"__DEVICE_DIMENSION__":	{
-		"x":	1423,
+		"x":	2859,
 		"y":	1725
 	},
 	"stat_today":	{
-		"key":	"2026-06-06",
-		"focusTime":	0,
-		"breakTime":	0
+		"key":	"2026-06-28",
+		"focusTime":	4498,
+		"breakTime":	1199
 	}
 }
